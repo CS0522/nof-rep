@@ -692,7 +692,7 @@ spdk_nvme_ns_cmd_read_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *q
 					      rc);
 	}
 }
-
+ 
 int
 spdk_nvme_ns_cmd_read_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair, void *buffer,
 			      void *metadata,

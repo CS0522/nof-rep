@@ -1031,7 +1031,7 @@ _nvme_qpair_submit_request(struct spdk_nvme_qpair *qpair, struct nvme_request *r
 	} else {
 		req->submit_tick = 0;
 	}
-
+ 
 	/* Allow two cases:
 	 * 1. NVMe qpair is enabled.
 	 * 2. Always allow fabrics commands through - these get

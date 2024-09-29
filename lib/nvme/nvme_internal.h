@@ -269,7 +269,7 @@ struct nvme_error_cmd {
 	struct spdk_nvme_status		status;
 	TAILQ_ENTRY(nvme_error_cmd)	link;
 };
- 
+  
 struct nvme_request {
     // 添加一个保存 task index 的字段
     uint32_t task_index;

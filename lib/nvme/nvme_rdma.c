@@ -959,7 +959,7 @@ nvme_rdma_create_rsps(struct nvme_rdma_rsp_opts *opts)
 			goto fail;
 		}
 		rsp_sgl->lkey = spdk_rdma_memory_translation_get_lkey(&translation);
-
+ 
 		recv_wr->wr_id = (uint64_t)&rsp->rdma_wr;
 		recv_wr->next = NULL;
 		recv_wr->sg_list = rsp_sgl;

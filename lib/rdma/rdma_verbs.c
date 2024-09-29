@@ -8,7 +8,7 @@
 #include "spdk/stdinc.h"
 #include "spdk/string.h"
 #include "spdk/likely.h"
-
+ 
 #include "spdk_internal/rdma.h"
 #include "spdk/log.h"
 
