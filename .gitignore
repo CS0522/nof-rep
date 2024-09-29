@@ -1,0 +1,17 @@
+/*
+!/app
+/app/*
+!/app/spdk_nvme_perf
+!/lib
+!/module
+!/examples
+/examples/*
+!/examples/nvmf
+*.o
+*.d
+*.map
+*.log
+*.mk
+Makefile
+*.md
+!.gitignore
