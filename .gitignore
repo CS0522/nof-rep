@@ -2,6 +2,9 @@
 !/app
 /app/*
 !/app/spdk_nvme_perf
+!/include
+/include/*
+!/include/spdk
 !/lib
 !/module
 !/examples
