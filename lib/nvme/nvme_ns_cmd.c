@@ -694,10 +694,10 @@ spdk_nvme_ns_cmd_read_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *q
 }
  
 int
-spdk_nvme_ns_cmd_read_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair, void *buffer,
+spdk_nvme_ns_cmd_read_with_md_io_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair, void *buffer,
 			      void *metadata,
 			      uint64_t lba,
-			      uint32_t lba_count, spdk_nvme_cmd_cb cb_fn, void *cb_arg, uint32_t task_index, 
+			      uint32_t lba_count, spdk_nvme_cmd_cb cb_fn, void *cb_arg, uint32_t io_id, 
 			      uint32_t io_flags, uint16_t apptag_mask, uint16_t apptag)
 {
     // payload: task->iovs[0].iov_base
@@ -716,8 +716,8 @@ spdk_nvme_ns_cmd_read_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_nv
 			      io_flags,
 			      apptag_mask, apptag, 0, false, NULL, &rc);
 
-    // nvme_req 添加 task->index 字段
-    req->task_index = task_index;
+    // nvme_req 添加 io_id 字段
+    req->io_id = io_id;
 
 	if (req != NULL) {
 		return nvme_qpair_submit_request(qpair, req);
@@ -849,9 +849,9 @@ spdk_nvme_ns_cmd_readv_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *
 }
 
 int
-spdk_nvme_ns_cmd_readv_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
+spdk_nvme_ns_cmd_readv_with_md_io_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
 			       uint64_t lba, uint32_t lba_count,
-			       spdk_nvme_cmd_cb cb_fn, void *cb_arg, uint32_t task_index, uint32_t io_flags,
+			       spdk_nvme_cmd_cb cb_fn, void *cb_arg, uint32_t io_id, uint32_t io_flags,
 			       spdk_nvme_req_reset_sgl_cb reset_sgl_fn,
 			       spdk_nvme_req_next_sge_cb next_sge_fn, void *metadata,
 			       uint16_t apptag_mask, uint16_t apptag)
@@ -873,8 +873,8 @@ spdk_nvme_ns_cmd_readv_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_n
 	req = _nvme_ns_cmd_rw(ns, qpair, &payload, 0, 0, lba, lba_count, cb_fn, cb_arg, SPDK_NVME_OPC_READ,
 			      io_flags, apptag_mask, apptag, 0, true, NULL, &rc);
 
-    // nvme_req 添加 task->index 字段
-    req->task_index = task_index;
+    // nvme_req 添加 io_id 字段
+    req->io_id = io_id;
 
 	if (req != NULL) {
 		return nvme_qpair_submit_request(qpair, req);
@@ -1132,9 +1132,9 @@ spdk_nvme_ns_cmd_write_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *
 }
 
 int
-spdk_nvme_ns_cmd_write_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
+spdk_nvme_ns_cmd_write_with_md_io_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
 			       void *buffer, void *metadata, uint64_t lba,
-			       uint32_t lba_count, spdk_nvme_cmd_cb cb_fn, void *cb_arg, uint32_t task_index, 
+			       uint32_t lba_count, spdk_nvme_cmd_cb cb_fn, void *cb_arg, uint32_t io_id, 
 			       uint32_t io_flags, uint16_t apptag_mask, uint16_t apptag)
 {
 	struct nvme_request *req;
@@ -1150,8 +1150,8 @@ spdk_nvme_ns_cmd_write_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_n
 	req = _nvme_ns_cmd_rw(ns, qpair, &payload, 0, 0, lba, lba_count, cb_fn, cb_arg, SPDK_NVME_OPC_WRITE,
 			      io_flags, apptag_mask, apptag, 0, false, NULL, &rc);
 	
-    // nvme_req 添加 task->index 字段
-    req->task_index = task_index;
+    // nvme_req 添加 io_id 字段
+    req->io_id = io_id;
     
     if (req != NULL) {
 		return nvme_qpair_submit_request(qpair, req);
@@ -1244,9 +1244,9 @@ spdk_nvme_ns_cmd_writev_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair 
 }
 
 int
-spdk_nvme_ns_cmd_writev_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
+spdk_nvme_ns_cmd_writev_with_md_io_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
 				uint64_t lba, uint32_t lba_count,
-				spdk_nvme_cmd_cb cb_fn, void *cb_arg, uint32_t task_index, uint32_t io_flags,
+				spdk_nvme_cmd_cb cb_fn, void *cb_arg, uint32_t io_id, uint32_t io_flags,
 				spdk_nvme_req_reset_sgl_cb reset_sgl_fn,
 				spdk_nvme_req_next_sge_cb next_sge_fn, void *metadata,
 				uint16_t apptag_mask, uint16_t apptag)
@@ -1268,8 +1268,8 @@ spdk_nvme_ns_cmd_writev_with_md_task_index(struct spdk_nvme_ns *ns, struct spdk_
 	req = _nvme_ns_cmd_rw(ns, qpair, &payload, 0, 0, lba, lba_count, cb_fn, cb_arg, SPDK_NVME_OPC_WRITE,
 			      io_flags, apptag_mask, apptag, 0, true, NULL, &rc);
 	
-    // nvme_req 添加 task->index 字段
-    req->task_index = task_index;
+    // nvme_req 添加 io_id 字段
+    req->io_id = io_id;
 
     if (req != NULL) {
 		return nvme_qpair_submit_request(qpair, req);

@@ -271,8 +271,8 @@ struct nvme_error_cmd {
 };
   
 struct nvme_request {
-    // 添加一个保存 task index 的字段
-    uint32_t task_index;
+    // 添加一个保存 io id 的字段
+    uint32_t io_id;
 
 	// cmd.cid 与 rdma_req 绑定
 	struct spdk_nvme_cmd		cmd;

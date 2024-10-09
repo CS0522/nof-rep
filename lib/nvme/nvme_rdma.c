@@ -2357,12 +2357,12 @@ nvme_rdma_qpair_submit_request(struct spdk_nvme_qpair *qpair,
 	wr->next = NULL;
 	nvme_rdma_trace_ibv_sge(wr->sg_list);
 
-    // 用 wr->imm_data 字段记录 req->task_index
-    wr->imm_data = req->task_index;
+    // 用 wr->imm_data 字段记录 req->io_id
+    wr->imm_data = req->io_id;
 
     // myprint
-    // printf("提交请求 task_index = %u, req->cmd.cid = %u, rdma_req->id = %u, wr_id = %#X\n", 
-    //             req->task_index, req->cmd.cid, rdma_req->id, rdma_req->send_wr.wr_id);
+    // printf("提交请求 io_id = %u, req->cmd.cid = %u, rdma_req->id = %u, wr_id = %#X\n", 
+    //             req->io_id, req->cmd.cid, rdma_req->id, rdma_req->send_wr.wr_id);
 
 	spdk_rdma_qp_queue_send_wrs(rqpair->rdma_qp, wr);
 
@@ -2576,7 +2576,7 @@ nvme_rdma_process_recv_completion(struct nvme_rdma_poller *poller, struct ibv_wc
 	rdma_req->rdma_rsp = rdma_rsp;
 
     // myprint
-    // printf("接收完毕 rdma_rsp->cp.cid = %u -> rdma_req->id = %u, rdma_req->send_wr.wr_id = %#X, task_index = send_wr->imm_data = %u\n", 
+    // printf("接收完毕 rdma_rsp->cp.cid = %u -> rdma_req->id = %u, rdma_req->send_wr.wr_id = %#X, io_id = send_wr->imm_data = %u\n", 
     //             rdma_rsp->cpl.cid, rdma_req->id, rdma_req->send_wr.wr_id, rdma_req->send_wr.imm_data);
 
 	if ((rdma_req->completion_flags & NVME_RDMA_SEND_COMPLETED) == 0) {
@@ -2660,7 +2660,7 @@ nvme_rdma_process_send_completion(struct nvme_rdma_poller *poller,
 	rqpair->current_num_sends--;
 
     // myprint
-    // printf("发送完毕 rdma_req->id = %u, rdma_req->send_wr->wr_id = %#X, task_index = send_wr->imm_data = %u\n", 
+    // printf("发送完毕 rdma_req->id = %u, rdma_req->send_wr->wr_id = %#X, io_id = send_wr->imm_data = %u\n", 
     //             rdma_req->id, rdma_req->send_wr.wr_id, rdma_req->send_wr.imm_data);
  
 	if ((rdma_req->completion_flags & NVME_RDMA_RECV_COMPLETED) == 0) {
