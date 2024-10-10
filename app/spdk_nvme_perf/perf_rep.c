@@ -1584,7 +1584,6 @@ submit_single_io_rep(struct perf_task *main_task)
     struct ns_worker_ctx	*ns_ctx = NULL;
 	struct ns_entry		*entry = NULL;
     uint64_t		offset_in_ios;
-    uint32_t        io_id;
     bool is_read;
     int			rc;
 
@@ -1612,13 +1611,9 @@ submit_single_io_rep(struct perf_task *main_task)
 	} else {
 		is_read = false;
 	}
-
-    // 修改 io_id。直接 += g_queue_depth，可以避免和其他 perf_task 冲突
-    io_id = main_task->io_id + g_queue_depth;
     
     TAILQ_FOREACH(task, &main_task->rep_tasks, link){
         task->submit_tsc = spdk_get_ticks();
-        task->io_id = io_id;
         task->offset_in_ios = offset_in_ios;
         task->is_read = is_read;
         ns_ctx = task->ns_ctx;
@@ -1710,15 +1705,17 @@ task_complete(struct perf_task *task)
         return ;
     } else {
         main_task->rep_completed_num = 0;
+		uint32_t io_id = main_task->io_id + g_queue_depth;
         // 枚举所有副本，检查其 ns 是否 draining
+		// 同时, 更新 io_id, 直接 += g_queue_depth，可以避免和其他 perf_task 冲突
         // TODO: 是否有性能更高的做法？
-        bool is_draining = false;
         struct perf_task *t_task = NULL;
         TAILQ_FOREACH(t_task, &main_task->rep_tasks, link){
             if (spdk_unlikely(t_task->ns_ctx->is_draining)) {
                 rep_task_release(main_task);
                 return ;
             }
+			t_task->io_id = io_id;
         }
         submit_single_io_rep(main_task);
     }
