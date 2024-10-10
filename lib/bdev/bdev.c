@@ -29,6 +29,10 @@
 #include "spdk_internal/trace_defs.h"
 #include "spdk_internal/assert.h"
 
+#ifdef LANTENCY_LOG
+#include"spdk/latency_rdma_struct.h"
+#endif
+
 #ifdef SPDK_CONFIG_VTUNE
 #include "ittnotify.h"
 #include "ittnotify_types.h"
@@ -3573,6 +3577,9 @@ bdev_io_submit(struct spdk_bdev_io *bdev_io)
 	bdev_ch_add_to_io_submitted(bdev_io);
 
 	bdev_io->internal.submit_tsc = spdk_get_ticks();
+	#ifdef LANTENCY_LOG
+	clock_gettime(CLOCK_REALTIME, &bdev_io->start_time);
+	#endif
 	spdk_trace_record_tsc(bdev_io->internal.submit_tsc, TRACE_BDEV_IO_START,
 			      ch->trace_id, bdev_io->u.bdev.num_blocks,
 			      (uintptr_t)bdev_io, (uint64_t)bdev_io->type, bdev_io->internal.caller_ctx,
@@ -7251,6 +7258,16 @@ bdev_io_complete(void *ctx)
 
 	tsc = spdk_get_ticks();
 	tsc_diff = tsc - bdev_io->internal.submit_tsc;
+	#ifdef LANTENCY_LOG
+	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
+	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
+	struct spdk_nvmf_rdma_request* rdma_req = SPDK_CONTAINEROF(req, struct spdk_nvmf_rdma_request, req); 
+    latency_log->io_id = rdma_req->io_id;
+    latency_log->module = "bdev";
+    latency_log->start_time = bdev_io->start_time;
+	clock_gettime(CLOCK_REALTIME, &latency_log->end_time);
+	spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, latency_log);
+	#endif
 
 	bdev_ch_remove_from_io_submitted(bdev_io);
 	spdk_trace_record_tsc(tsc, TRACE_BDEV_IO_DONE, bdev_ch->trace_id, 0, (uintptr_t)bdev_io,

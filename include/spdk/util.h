@@ -15,6 +15,23 @@
 
 #include "spdk/stdinc.h"
 
+#define LANTENCY_LOG
+
+#ifdef LANTENCY_LOG
+#define LOGFILEPATH "./log_latency_file.csv"
+
+struct latency_log_ctx{
+	uint64_t io_id;
+	const char* module;
+	struct timespec start_time;
+	struct timespec end_time;
+};
+
+void write_log_to_file(uint64_t wr_id, const char* module, struct timespec start_time, struct timespec end_time);
+
+void write_latency_log(void* ctx);
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
