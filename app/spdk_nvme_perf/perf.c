@@ -416,10 +416,6 @@ nvme_perf_next_sge(void *ref, void **address, uint32_t *length)
 	return 0;
 }
 
-// |<------------------ iovs --------------------->|
-// |       iov0         | ... |    iov(iovcnt)     |
-// | iov_base | iov_len | ... | iov_base | iov_len |
-// (指向 buf 所在空间)
 static int
 nvme_perf_allocate_iovs(struct perf_task *task, void *buf, uint32_t length)
 {
@@ -842,8 +838,6 @@ nvme_setup_payload(struct perf_task *task, uint8_t pattern)
 		fprintf(stderr, "task->buf spdk_dma_zmalloc failed\n");
 		exit(1);
 	}
-	// pattern = queue_depth % 8 + 1
-	// pattern 的作用为填充数据
 	memset(buf, pattern, max_io_size_bytes);
 
 	rc = nvme_perf_allocate_iovs(task, buf, max_io_size_bytes);
@@ -1016,7 +1010,96 @@ nvme_verify_io(struct perf_task *task, struct ns_entry *entry)
 	}
 }
 
-c
+/*
+ * TODO: If a controller has multiple namespaces, they could all use the same queue.
+ *  For now, give each namespace/thread combination its own queue.
+ */
+static int
+nvme_init_ns_worker_ctx(struct ns_worker_ctx *ns_ctx)
+{
+	const struct spdk_nvme_ctrlr_opts *ctrlr_opts;
+	struct spdk_nvme_io_qpair_opts opts;
+	struct ns_entry *entry = ns_ctx->entry;
+	struct spdk_nvme_poll_group *group;
+	struct spdk_nvme_qpair *qpair;
+	uint64_t poll_timeout_tsc;
+	int i, rc;
+
+	ns_ctx->u.nvme.num_active_qpairs = g_nr_io_queues_per_ns;
+	ns_ctx->u.nvme.num_all_qpairs = g_nr_io_queues_per_ns + g_nr_unused_io_queues;
+	ns_ctx->u.nvme.qpair = calloc(ns_ctx->u.nvme.num_all_qpairs, sizeof(struct spdk_nvme_qpair *));
+	if (!ns_ctx->u.nvme.qpair) {
+		return -1;
+	}
+
+	spdk_nvme_ctrlr_get_default_io_qpair_opts(entry->u.nvme.ctrlr, &opts, sizeof(opts));
+	if (opts.io_queue_requests < entry->num_io_requests) {
+		opts.io_queue_requests = entry->num_io_requests;
+	}
+	opts.delay_cmd_submit = true;
+	opts.create_only = true;
+
+	ctrlr_opts = spdk_nvme_ctrlr_get_opts(entry->u.nvme.ctrlr);
+	opts.async_mode = !(spdk_nvme_ctrlr_get_transport_id(entry->u.nvme.ctrlr)->trtype ==
+			    SPDK_NVME_TRANSPORT_PCIE
+			    && ns_ctx->u.nvme.num_all_qpairs > ctrlr_opts->admin_queue_size);
+
+	ns_ctx->u.nvme.group = spdk_nvme_poll_group_create(ns_ctx, NULL);
+	if (ns_ctx->u.nvme.group == NULL) {
+		goto poll_group_failed;
+	}
+
+	group = ns_ctx->u.nvme.group;
+	for (i = 0; i < ns_ctx->u.nvme.num_all_qpairs; i++) {
+		ns_ctx->u.nvme.qpair[i] = spdk_nvme_ctrlr_alloc_io_qpair(entry->u.nvme.ctrlr, &opts,
+					  sizeof(opts));
+		qpair = ns_ctx->u.nvme.qpair[i];
+		if (!qpair) {
+			printf("ERROR: spdk_nvme_ctrlr_alloc_io_qpair failed\n");
+			goto qpair_failed;
+		}
+
+		if (spdk_nvme_poll_group_add(group, qpair)) {
+			printf("ERROR: unable to add I/O qpair to poll group.\n");
+			spdk_nvme_ctrlr_free_io_qpair(qpair);
+			goto qpair_failed;
+		}
+
+		if (spdk_nvme_ctrlr_connect_io_qpair(entry->u.nvme.ctrlr, qpair)) {
+			printf("ERROR: unable to connect I/O qpair.\n");
+			spdk_nvme_ctrlr_free_io_qpair(qpair);
+			goto qpair_failed;
+		}
+	}
+
+	/* Busy poll here until all qpairs are connected - this ensures once we start
+	 * I/O we aren't still waiting for some qpairs to connect. Limit the poll to
+	 * 10 seconds though.
+	 */
+	poll_timeout_tsc = spdk_get_ticks() + 10 * spdk_get_ticks_hz();
+	rc = -EAGAIN;
+	while (spdk_get_ticks() < poll_timeout_tsc && rc == -EAGAIN) {
+		spdk_nvme_poll_group_process_completions(group, 0, perf_disconnect_cb);
+		rc = spdk_nvme_poll_group_all_connected(group);
+		if (rc == 0) {
+			return 0;
+		}
+	}
+
+	/* If we reach here, it means we either timed out, or some connection failed. */
+	assert(spdk_get_ticks() > poll_timeout_tsc || rc == -EIO);
+
+qpair_failed:
+	for (; i > 0; --i) {
+		spdk_nvme_ctrlr_free_io_qpair(ns_ctx->u.nvme.qpair[i - 1]);
+	}
+
+	spdk_nvme_poll_group_destroy(ns_ctx->u.nvme.group);
+poll_group_failed:
+	free(ns_ctx->u.nvme.qpair);
+	return -1;
+}
+
 static void
 nvme_cleanup_ns_worker_ctx(struct ns_worker_ctx *ns_ctx)
 {
@@ -3127,6 +3210,8 @@ setup_sig_handlers(void)
 int
 main(int argc, char **argv)
 {
+    printf("========== perf ==========\n");
+    
 	int rc;
 	struct worker_thread *worker, *main_worker;
 	struct ns_worker_ctx *ns_ctx;
@@ -3167,7 +3252,7 @@ main(int argc, char **argv)
 	rc = setup_sig_handlers();
 	if (rc != 0) {
 		rc = -1;
-		goto clenanup;
+		goto cleanup;
 	}
 
 	g_tsc_rate = spdk_get_ticks_hz();

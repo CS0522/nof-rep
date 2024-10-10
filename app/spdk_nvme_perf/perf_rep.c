@@ -3431,6 +3431,8 @@ setup_sig_handlers(void)
 int
 main(int argc, char **argv)
 {
+    printf("========== perf_rep ==========\n");
+
 	int rc;
 	struct worker_thread *worker, *main_worker;
 	struct ns_worker_ctx *ns_ctx;
