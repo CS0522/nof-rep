@@ -16,5 +16,6 @@
 *.log
 *.mk
 Makefile
+!/app/spdk_nvme_perf/Makefile
 *.md
 !.gitignore
