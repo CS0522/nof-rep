@@ -179,12 +179,28 @@ struct perf_task {
 	uint32_t		iov_offset; /* Offset in current iovec. */
 	struct iovec		md_iov;
 	uint64_t		submit_tsc;
+    uint64_t        offset_in_ios; // 原 perf 该变量在 submit_single_io 的时候实时生成，为了适应副本逻辑改为属性
 	bool			is_read;
 	struct spdk_dif_ctx	dif_ctx;
 #if HAVE_LIBAIO
 	struct iocb		iocb;
 #endif
 	TAILQ_ENTRY(perf_task)	link;
+
+    /*
+     * 用于维护副本的同步 
+     * main_task 是主副本
+     * rep_tasks 是记录所有相关副本 perf_task 的队列，所有副本公用一个该队列
+     * rep_completed_num 用于计算当前已完成的副本数量
+     * 实现中的细节：
+     * 1. 由于只有一个线程管理所有副本，不需要上锁
+     * 2. 所有的副本间可以互相感知，通过一个 rep_tasks 队列来实现
+     * 3. TAILQ 原始设计不支持指针共享，考虑仅让主副本维护 rep_tasks，然后所有从副本可以感知到主副本；而不是将 TAILQ 改为支持共享
+     * 4. 同样的，rep_completed_num 也只由 main_task 维护唯一变量
+     */
+    struct perf_task *main_task;
+    TAILQ_HEAD(, perf_task)	rep_tasks;
+    uint32_t rep_completed_num;
 };
 
 struct worker_thread {
@@ -277,28 +293,11 @@ static uint32_t g_rdma_srq_size;
 uint8_t *g_psk = NULL;
 
 /**
- * 全局 g_tasks 指针数组保存共享 task
- * perf_task 需要与每个 ns_ctx 关联，
- * 因此保存在 g_tasks 数组中的 task 在取出的时候
- * 需要深拷贝一份新的 task 然后修改 ns_ctx
- */
-static struct perf_task **g_tasks;
-static uint32_t g_num_tasks = 0;
-
-/**
  * 副本数量
  * 测试默认使用三副本
  * TODO: 后续需要添加支持用 option 来修改
  */
 static uint32_t g_rep_num = 3;
-
-/**
- * 保存随机值数组
- * 如果超过数组长度，进行取余操作
- */
-static uint64_t *g_offset_in_ios;
-static bool *g_is_read;
-static uint32_t g_random_num = 0;
 
 /* When user specifies -Q, some error messages are rate limited.  When rate
  * limited, we only print the error message every g_quiet_count times the
@@ -1545,28 +1544,6 @@ get_min_size_in_ios(void)
 }
 
 static inline void
-update_g_random_array(uint32_t random_num)
-{
-    // 按照min_size_in_ios 计算，防止 offset 越界
-    uint64_t min_size_in_ios = get_min_size_in_ios();
-
-    srand((unsigned int)time(NULL));
-    uint32_t i = 0;
-    for (; i < random_num; ++i)
-    {
-        // 设置 offset_in_ios 随机值
-        g_offset_in_ios[i] = rand() % min_size_in_ios;
-        // 设置 is_read 随机值
-        if ((g_rw_percentage == 100) ||
-	        (g_rw_percentage != 0 && ((rand() % 100) < g_rw_percentage))) {
-		    g_is_read[i] = true;
-	    } else {
-		    g_is_read[i] = false;
-	    }
-    }
-}
-
-static inline void
 submit_single_io(struct perf_task *task)
 {
 	uint64_t		offset_in_ios;
@@ -1574,44 +1551,13 @@ submit_single_io(struct perf_task *task)
 	struct ns_worker_ctx	*ns_ctx = task->ns_ctx;
 	struct ns_entry		*entry = ns_ctx->entry;
 
-    uint64_t min_size_in_ios = get_min_size_in_ios();
-
 	assert(!ns_ctx->is_draining);
 
-    if (entry->zipf) {
-	    offset_in_ios = spdk_zipf_generate(entry->zipf);
-	} else if (g_is_random) {
-		offset_in_ios = g_offset_in_ios[task->io_id % g_random_num];
-	} else {
-		offset_in_ios = ns_ctx->offset_in_ios++;
-		if (ns_ctx->offset_in_ios == min_size_in_ios) {
-			ns_ctx->offset_in_ios = 0;
-		}
-	}
-
-    if (g_is_random)
-    {
-        task->is_read = g_is_read[task->io_id % g_random_num];
-    }
-    else
-    {
-        if ((g_rw_percentage == 100) ||
-	        (g_rw_percentage != 0 && ((rand_r(&entry->seed) % 100) < g_rw_percentage))) {
-	    	task->is_read = true;
-	    } else {
-	    	task->is_read = false;
-	    }
-    }
-
 	task->submit_tsc = spdk_get_ticks();
-
 	rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
 
 	if (spdk_unlikely(rc != 0)) {
-        // g_continue_on_error = false
 		if (g_continue_on_error) {
-			/* We can't just resubmit here or we can get in a loop that
-			 * stack overflows. */
 			TAILQ_INSERT_TAIL(&ns_ctx->queued_tasks, task, link);
 		} else {
 			RATELIMIT_LOG("starting I/O failed: %d\n", rc);
@@ -1625,10 +1571,104 @@ submit_single_io(struct perf_task *task)
 		ns_ctx->current_queue_depth++;
 		ns_ctx->stats.io_submitted++;
 	}
-
 	if (spdk_unlikely(g_number_ios && ns_ctx->stats.io_submitted >= g_number_ios)) {
 		ns_ctx->is_draining = true;
 	}
+}
+
+static inline void
+submit_single_io_rep(struct perf_task *main_task)
+{
+    
+    struct perf_task *task  = NULL;
+    struct ns_worker_ctx	*ns_ctx = NULL;
+	struct ns_entry		*entry = NULL;
+    uint64_t		offset_in_ios;
+    uint32_t        io_id;
+    bool is_read;
+    int			rc;
+
+    struct ns_worker_ctx	*main_ns_ctx = main_task->ns_ctx;
+	struct ns_entry		*main_entry = main_ns_ctx->entry;
+    
+    uint64_t min_size_in_ios = get_min_size_in_ios();
+
+	assert(!main_ns_ctx->is_draining);
+
+    // 仅在 submit_single_io_rep 生成 offset_in_ios 和 is_read
+    if(main_entry->zipf){
+        offset_in_ios = spdk_zipf_generate(main_entry->zipf);
+    } else if (g_is_random){
+        offset_in_ios = rand_r(&main_entry->seed) % main_entry->size_in_ios;
+    } else {
+        offset_in_ios = main_ns_ctx->offset_in_ios++;
+        if (main_ns_ctx->offset_in_ios == min_size_in_ios) {
+			main_ns_ctx->offset_in_ios = 0;
+		}
+    }
+    if ((g_rw_percentage == 100) ||
+	    (g_rw_percentage != 0 && ((rand_r(&main_entry->seed) % 100) < g_rw_percentage))) {
+		is_read = true;
+	} else {
+		is_read = false;
+	}
+
+    // 修改 io_id。直接 += g_queue_depth，可以避免和其他 perf_task 冲突
+    io_id = main_task->io_id + g_queue_depth;
+    
+    TAILQ_FOREACH(task, &main_task->rep_tasks, link){
+        task->submit_tsc = spdk_get_ticks();
+        task->io_id = io_id;
+        task->offset_in_ios = offset_in_ios;
+        task->is_read = is_read;
+        ns_ctx = task->ns_ctx;
+        entry = ns_ctx->entry;
+        rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
+
+        if (spdk_unlikely(rc != 0)) {
+            if (g_continue_on_error) {
+                TAILQ_INSERT_TAIL(&ns_ctx->queued_tasks, task, link);
+            } else {
+                RATELIMIT_LOG("starting I/O failed: %d\n", rc);
+                spdk_dma_free(task->iovs[0].iov_base);
+                free(task->iovs);
+                spdk_dma_free(task->md_iov.iov_base);
+                task->ns_ctx->status = 1;
+                free(task);
+            }
+        } else {
+            ns_ctx->current_queue_depth++;
+            ns_ctx->stats.io_submitted++;
+        }
+        if (spdk_unlikely(g_number_ios && ns_ctx->stats.io_submitted >= g_number_ios)) {
+            ns_ctx->is_draining = true;
+        }
+    }
+}
+
+/**
+ * 回收请求的所有副本的IO buffer.
+ * 由于在创建副本的时候，并没有对 IO buffer 赋值，所以只需要释放一份
+ */
+
+static inline void
+rep_task_release(struct perf_task *main_task)
+{
+    // myprint
+    // printf("进入 rep_task_release...\n");
+
+    struct perf_task *task = NULL;
+    // 释放数据和原数据 buf
+    spdk_dma_free(main_task->iovs[0].iov_base);
+    spdk_dma_free(main_task->md_iov.iov_base);
+    TAILQ_FOREACH(task, &main_task->rep_tasks, link){
+        free(task->iovs);
+        // TODO: 直接比较指针，会不会有问题？
+        if(task != main_task) {
+            free(task);
+        }
+    }
+    free(main_task);
 }
 
 static inline void
@@ -1658,26 +1698,30 @@ task_complete(struct perf_task *task)
 		/* add application level verification for end-to-end data protection */
 		entry->fn_table->verify_io(task, entry);
 	}
-
-	/*
-	 * is_draining indicates when time has expired or io_submitted exceeded
-	 * g_number_ios for the test run and we are just waiting for the previously
-	 * submitted I/O to complete. In this case, do not submit a new I/O to
-	 * replace the one just completed.
-	 */
-	if (spdk_unlikely(ns_ctx->is_draining)) {
-        /** 事后统一回收 g_tasks */
-        // // myprint
-        // printf("进入 ns_ctx->is_draining...\n");
-        // spdk_dma_free(task->iovs[0].iov_base);
-		// free(task->iovs);
-		// spdk_dma_free(task->md_iov.iov_base);
-        // free(task);
-	} else {
-        // 修改 io_id。直接 += g_queue_depth，可以避免和其他 perf_task 冲突
-        task->io_id += g_queue_depth;
-		submit_single_io(task);
-	}
+    /**
+     * 副本任务进行同步，仅当所有副本全部完成时，
+     * 1. 回收所有副本
+     * 2. 或者执行新的提交
+     * 由于所有的副本由一个线程管理，所以不存在同步的问题，不需要锁
+    */
+    struct perf_task *main_task = task->main_task;
+    ++ main_task->rep_completed_num;
+    if (main_task->rep_completed_num < g_rep_num){
+        return ;
+    } else {
+        main_task->rep_completed_num = 0;
+        // 枚举所有副本，检查其 ns 是否 draining
+        // TODO: 是否有性能更高的做法？
+        bool is_draining = false;
+        struct perf_task *t_task = NULL;
+        TAILQ_FOREACH(t_task, &main_task->rep_tasks, link){
+            if (spdk_unlikely(t_task->ns_ctx->is_draining)) {
+                rep_task_release(main_task);
+                return ;
+            }
+        }
+        submit_single_io_rep(main_task);
+    }
 }
 
 static void
@@ -1708,7 +1752,7 @@ io_complete(void *ctx, const struct spdk_nvme_cpl *cpl)
 }
 
 static struct perf_task *
-allocate_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
+allocate_main_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
 {
 	struct perf_task *task;
 
@@ -1722,24 +1766,26 @@ allocate_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
 
 	task->ns_ctx = ns_ctx;
 
+    // 副本相关新添加逻辑
     task->io_id = io_id;
+    TAILQ_INIT(&task->rep_tasks);
+    TAILQ_INSERT_TAIL(&task->rep_tasks, task, link);
+    task->rep_completed_num = 0;
 
     // myprint
     // printf("*** 创建 IO 任务 task->io_id = %u ***\n", task->io_id);
     // printf("    task->ns_ctx->entry->name = %s\n", task->ns_ctx->entry->name);
-
     // printf("    buffer = task->iovs[0].iov_base = %#p\n", task->iovs[0].iov_base);
     // printf("    metadata = task->md_iov.iov_base = %#p\n", task->md_iov.iov_base);
-
 	return task;
 }
 
 static struct perf_task *
-deep_copy_task(struct perf_task *old_task, struct ns_worker_ctx *ns_ctx)
+copy_task(struct perf_task *main_task, struct ns_worker_ctx *ns_ctx)
 {
-    if (!old_task)
+    if (!main_task)
     {
-        fprintf(stderr, "Task is empty\n");
+        fprintf(stderr, "Main task doesn't exists!\n");
         return NULL;
     }
     struct perf_task *task_copy = calloc(1, sizeof(struct perf_task));
@@ -1748,17 +1794,19 @@ deep_copy_task(struct perf_task *old_task, struct ns_worker_ctx *ns_ctx)
         fprintf(stderr, "Out of memory allocating task_copy\n");
         exit(1);
     }
-    // 手动复制所有字段
+    // 使用副本的 ns
     task_copy->ns_ctx = ns_ctx;
-    task_copy->is_read = old_task->is_read;
-    task_copy->iovcnt = old_task->iovcnt;
+    // 不复制 buf, 只复制 iovs 索引
+    // 注意，理论上 iovs 也可以直接用 main_task 的，但是需要修改比较多的代码
+    task_copy->iovcnt = main_task->iovcnt;
     task_copy->iovs = calloc(task_copy->iovcnt, sizeof(struct iovec));
-    task_copy->iovs->iov_base = old_task->iovs->iov_base;
-    task_copy->iovs->iov_len = old_task->iovs->iov_len;
-    task_copy->iovpos = old_task->iovpos;
-    task_copy->iov_offset = old_task->iov_offset;
-    task_copy->md_iov = old_task->md_iov;
-    task_copy->io_id = old_task->io_id;
+    memcpy(task_copy->iovs, main_task->iovs, task_copy->iovcnt*sizeof(struct iovec));
+    task_copy->md_iov = main_task->md_iov;
+    task_copy->io_id = main_task->io_id;
+    // 主副本变量指向 main_task
+    task_copy->main_task = main_task;
+    // 插入到副本队列中
+    TAILQ_INSERT_TAIL(&main_task->rep_tasks, task_copy, link);
 
     // myprint
     // 验证 task_copy
@@ -1774,22 +1822,35 @@ deep_copy_task(struct perf_task *old_task, struct ns_worker_ctx *ns_ctx)
 }
 
 /**
- * 在下发 IO 之前要修改 task 关联的 ns_ctx
+ * 以副本逻辑进行初始 IO 的下发
+ * 我们假设每个 worker 包含且仅包含它管理所有副本的 ns_ctx
+ * 因此，此处对每个 ns_ctx 进行枚举
+ * 进一步，为了测试入队顺序会不会对性能有影响，我们测试两种初始下发 io 的方式：
+ * 1. baseline：每次先往第一个 ns_ctx 中加入主副本，然后顺序枚举其他 ns_ctx 加入从副本
+ * 2. 优化：均匀地将主副本加入到不同的 ns_ctx 中，然后顺序枚举其他 ns_ctx 加入从副本
  */
 static void 
-custom_submit_io(struct ns_worker_ctx *ns_ctx, int queue_depth)
+submit_io_rep(struct worker_thread *worker, int queue_depth) 
 {
-    struct perf_task *task;
-    while (queue_depth > 0)
-    {
-        /**
-         * 深拷贝 task 后修改关联的 ns_ctx
-         * 深拷贝避免修改 g_tasks 数组中的指针，
-         * 否则可能会造成各个线程之间的指针相互影响
-         */
-        task = deep_copy_task(g_tasks[g_queue_depth - queue_depth], ns_ctx);
-        --queue_depth;
-        submit_single_io(task);
+    struct ns_worker_ctx *ns_ctx = NULL;
+    struct perf_task *main_task = NULL;
+    uint32_t io_id = 0;
+
+    // [通过修改此处代码逻辑，来实现不同的入队顺序]
+    // 先为每个 io 请求生成所有副本，再执行提交
+    // io_id 的编号从 0 开始
+    while (queue_depth-- > 0){
+        bool is_main = true;
+        TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
+            if(is_main){
+                main_task = allocate_main_task(ns_ctx, queue_depth, io_id);
+                is_main = false;
+            } else {
+                copy_task(main_task, ns_ctx);
+            }
+        }
+        submit_single_io_rep(main_task);
+        io_id ++;
     }
 }
  
@@ -1917,24 +1978,14 @@ work_fn(void *arg)
 		tsc_end = tsc_current + g_time_in_sec * g_tsc_rate;
 	}
 
-    // assert(g_num_tasks == g_queue_depth);
-    // rc = pthread_barrier_wait(&g_worker_sync_barrier);
-
-    TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link)
-    {
-        custom_submit_io(ns_ctx, g_queue_depth);
-    }
+    // 执行下副本io。在此函数内举 ns_ctx
+    submit_io_rep(worker, g_queue_depth);
 
 	while (spdk_likely(!g_exit)) {
 		bool all_draining = true;
-
-		/*
-		 * Check for completed I/O for each controller. A new
-		 * I/O will be submitted in the io_complete callback
-		 * to replace each I/O that is completed.
-		 */
+		// perf_task 数量可能会超过 qp_queue 深度。例如默认设置 256 > 128
+        // 此时, perf_task 会排队在 ns_ctx->queued_tasks, 尝试重新提交
 		TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
-            // 不进入
 			if (g_continue_on_error && !ns_ctx->is_draining) {
 				/* Submit any I/O that is queued up */
 				TAILQ_INIT(&swap);
@@ -1942,9 +1993,9 @@ work_fn(void *arg)
 				while (!TAILQ_EMPTY(&swap)) {
 					task = TAILQ_FIRST(&swap);
 					TAILQ_REMOVE(&swap, task, link);
+                    // 如果 ns_ctx 已经结束，则不再提交
 					if (ns_ctx->is_draining) {
-						TAILQ_INSERT_TAIL(&ns_ctx->queued_tasks,
-								  task, link);
+						TAILQ_INSERT_TAIL(&ns_ctx->queued_tasks, task, link);
 						continue;
 					}
 					submit_single_io(task);
@@ -2017,7 +2068,6 @@ work_fn(void *arg)
 			if (!ns_ctx->is_draining) {
 				ns_ctx->is_draining = true;
 			}
-
 			if (ns_ctx->current_queue_depth > 0) {
 				ns_ctx->entry->fn_table->check_io(ns_ctx);
 				if (ns_ctx->current_queue_depth > 0) {
@@ -3478,29 +3528,6 @@ main(int argc, char **argv)
 
 	printf("Initialization complete. Launching workers.\n");
 
-    /**
-     * 1. 由主线程创建 task
-     * 2. 保存在全局的 tasks 数组中，这样所有 worker 都可以取得相同 task
-     */
-    g_random_num = 2 * g_queue_depth;
-    g_tasks = (struct perf_task**)malloc(g_queue_depth * sizeof(struct perf_task*));
-    g_offset_in_ios = (uint64_t*)malloc(g_random_num * sizeof(uint64_t));
-    g_is_read = (bool*)malloc(g_random_num * sizeof(bool));
-    uint32_t queue_depth = g_queue_depth;
-    // 一定需要一个 ns_ctx，所以取第一个 ns_ctx。之后会复制一份 task 然后修改指针
-    struct worker_thread *worker_tmp = TAILQ_FIRST(&g_workers);
-    struct ns_worker_ctx *ns_ctx_tmp = TAILQ_FIRST(&worker_tmp->ns_ctx);
-    while (queue_depth > 0)
-    {
-        g_tasks[g_num_tasks] = allocate_task(ns_ctx_tmp, queue_depth--, g_num_tasks);
-        ++g_num_tasks;
-    }
-    // 赋值随机数
-    update_g_random_array(g_random_num);
-    // myprint
-    // printf("g_num_tasks = %d, g_queue_depth = %d\n", g_num_tasks, g_queue_depth);
-    assert(g_num_tasks == g_queue_depth);
-
 	/* Launch all of the secondary workers */
 	g_main_core = spdk_env_get_current_core();
 	main_worker = NULL;
@@ -3525,15 +3552,6 @@ main(int argc, char **argv)
 cleanup:
 	fflush(stdout);
 
-    // 释放 tasks 和 buffer
-    while (g_num_tasks-- > 0)
-    {
-        spdk_dma_free(g_tasks[g_num_tasks]->iovs[0].iov_base);
-		free(g_tasks[g_num_tasks]->iovs);
-		spdk_dma_free(g_tasks[g_num_tasks]->md_iov.iov_base);
-    }
-    free(g_tasks);
-
 	if (thread_id && pthread_cancel(thread_id) == 0) {
 		pthread_join(thread_id, NULL);
 	}
@@ -3543,7 +3561,6 @@ cleanup:
 		if (rc != 0) {
 			break;
 		}
-
 		TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
 			if (ns_ctx->status != 0) {
 				rc = ns_ctx->status;
