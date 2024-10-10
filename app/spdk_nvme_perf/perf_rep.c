@@ -938,17 +938,17 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 	}
 
     // myprint
-    printf("*** 提交 IO 任务 task->io_id = %u ***\n", task->io_id);
-    printf("    task->ns_ctx->entry->name = %s\n", task->ns_ctx->entry->name);
+    // printf("*** 提交 IO 任务 task->io_id = %u ***\n", task->io_id);
+    // printf("    task->ns_ctx->entry->name = %s\n", task->ns_ctx->entry->name);
 
-    printf("    offset_in_ios = %lu\n", offset_in_ios);
-    printf("    lba = %lu\n", lba);
-    printf("    lba_count = entry->io_size_blocks = %u\n", entry->io_size_blocks);
-    printf("    buffer = task->iovs[0].iov_base = %#p\n", task->iovs[0].iov_base);
-    printf("    metadata = task->md_iov.iov_base = %#p\n", task->md_iov.iov_base);
-    printf("    diff_mode = %d (0 = NONE)\n", mode);
-    printf("    task->dif_ctx.apptag_mask = %u\n", task->dif_ctx.apptag_mask);
-    printf("    task->dif_ctx.app_tag = %u\n", task->dif_ctx.app_tag);
+    // printf("    offset_in_ios = %lu\n", offset_in_ios);
+    // printf("    lba = %lu\n", lba);
+    // printf("    lba_count = entry->io_size_blocks = %u\n", entry->io_size_blocks);
+    // printf("    buffer = task->iovs[0].iov_base = %#p\n", task->iovs[0].iov_base);
+    // printf("    metadata = task->md_iov.iov_base = %#p\n", task->md_iov.iov_base);
+    // printf("    diff_mode = %d (0 = NONE)\n", mode);
+    // printf("    task->dif_ctx.apptag_mask = %u\n", task->dif_ctx.apptag_mask);
+    // printf("    task->dif_ctx.app_tag = %u\n", task->dif_ctx.app_tag);
 
 	if (task->is_read) {
 		if (task->iovcnt == 1) {
@@ -1650,7 +1650,7 @@ static inline void
 rep_task_release(struct perf_task *main_task)
 {
     // myprint
-    printf("进入 rep_task_release...\n");
+    // printf("进入 rep_task_release...\n");
 
     struct perf_task *task = NULL;
     // 释放数据和原数据 buf
@@ -1771,10 +1771,10 @@ allocate_main_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
     task->rep_completed_num = 0;
 
     // myprint
-    printf("*** 创建 IO 任务 task->io_id = %u ***\n", task->io_id);
-    printf("    task->ns_ctx->entry->name = %s\n", task->ns_ctx->entry->name);
-    printf("    buffer = task->iovs[0].iov_base = %#p\n", task->iovs[0].iov_base);
-    printf("    metadata = task->md_iov.iov_base = %#p\n", task->md_iov.iov_base);
+    // printf("*** 创建 IO 任务 task->io_id = %u ***\n", task->io_id);
+    // printf("    task->ns_ctx->entry->name = %s\n", task->ns_ctx->entry->name);
+    // printf("    buffer = task->iovs[0].iov_base = %#p\n", task->iovs[0].iov_base);
+    // printf("    metadata = task->md_iov.iov_base = %#p\n", task->md_iov.iov_base);
 	return task;
 }
 
@@ -1808,13 +1808,13 @@ copy_task(struct perf_task *main_task, struct ns_worker_ctx *ns_ctx)
 
     // myprint
     // 验证 task_copy
-    printf("task_copy->io_id = %d, old_task->io_id = %d\n", task_copy->io_id, main_task->io_id);
-    printf("task_copy->ns_ctx pointer's addr = %#X, old_task->ns_ctx pointer's addr = %#X\n", &task_copy->ns_ctx, &main_task->ns_ctx);
-    printf("task_copy->entry->name = %s, old_task->entry->name = %s\n", task_copy->ns_ctx->entry->name, main_task->ns_ctx->entry->name);
-    printf("task_copy->iovs pointer's addr = %#X, old_task->iovs pointer's addr = %#X\n", &task_copy->iovs, &main_task->iovs);
-    printf("task_copy->iovs' addr = %#X, old_task->iovs' addr = %#X\n", task_copy->iovs, main_task->iovs);
-    printf("task_copy->iovs->iov_base's addr = %#X, old_task->iovs->iov_base's addr = %#X\n", task_copy->iovs->iov_base, main_task->iovs->iov_base);
-    printf("task_copy->is_read = %d, old_task->is_read = %d\n", task_copy->is_read, main_task->is_read);
+    // printf("task_copy->io_id = %d, old_task->io_id = %d\n", task_copy->io_id, main_task->io_id);
+    // printf("task_copy->ns_ctx pointer's addr = %#X, old_task->ns_ctx pointer's addr = %#X\n", &task_copy->ns_ctx, &main_task->ns_ctx);
+    // printf("task_copy->entry->name = %s, old_task->entry->name = %s\n", task_copy->ns_ctx->entry->name, main_task->ns_ctx->entry->name);
+    // printf("task_copy->iovs pointer's addr = %#X, old_task->iovs pointer's addr = %#X\n", &task_copy->iovs, &main_task->iovs);
+    // printf("task_copy->iovs' addr = %#X, old_task->iovs' addr = %#X\n", task_copy->iovs, main_task->iovs);
+    // printf("task_copy->iovs->iov_base's addr = %#X, old_task->iovs->iov_base's addr = %#X\n", task_copy->iovs->iov_base, main_task->iovs->iov_base);
+    // printf("task_copy->is_read = %d, old_task->is_read = %d\n", task_copy->is_read, main_task->is_read);
 
     return task_copy;
 }

@@ -157,13 +157,13 @@ spdk_rdma_qp_flush_send_wrs(struct spdk_rdma_qp *spdk_rdma_qp, struct ibv_send_w
 
     // myprint
     // 发送前验证 send_wr->imm_data
-    printf("*** QP 发送 wrs ***\n");
-    struct ibv_send_wr *wr_tmp = spdk_rdma_qp->send_wrs.first;
-    while (wr_tmp != spdk_rdma_qp->send_wrs.last->next)
-    {
-        printf("wr_id = %#X, wr->imm_data = %u\n", wr_tmp->wr_id, wr_tmp->imm_data);
-        wr_tmp = wr_tmp->next;
-    }
+    // printf("*** QP 发送 wrs ***\n");
+    // struct ibv_send_wr *wr_tmp = spdk_rdma_qp->send_wrs.first;
+    // while (wr_tmp != spdk_rdma_qp->send_wrs.last->next)
+    // {
+    //     printf("wr_id = %#X, wr->imm_data = %u\n", wr_tmp->wr_id, wr_tmp->imm_data);
+    //     wr_tmp = wr_tmp->next;
+    // }
 
 	rc = ibv_post_send(spdk_rdma_qp->qp, spdk_rdma_qp->send_wrs.first, bad_wr);
 
