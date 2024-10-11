@@ -69,6 +69,24 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task,
 void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num);
 #endif
 
+#define LANTENCY_LOG
+#define APP_THREAD_EXCLUSIVE_REACTOR
+
+#ifdef LANTENCY_LOG
+#define LOGFILEPATH "./log_latency_file.csv"
+
+struct latency_log_ctx{
+	uint32_t io_id;
+	const char* module;
+	struct timespec start_time;
+	struct timespec end_time;
+};
+
+void write_log_to_file(uint32_t io_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish);
+
+void write_latency_log(void* ctx);
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

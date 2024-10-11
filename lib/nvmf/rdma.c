@@ -28,7 +28,7 @@ struct spdk_nvme_rdma_hooks g_nvmf_hooks = {};
 const struct spdk_nvmf_transport_ops spdk_nvmf_transport_rdma;
 
 #ifdef LANTENCY_LOG
-static uint64_t num = 0;
+static uint32_t num = 0;
 #endif
 
 /*
@@ -209,7 +209,7 @@ struct spdk_nvmf_rdma_wr {
 struct spdk_nvmf_rdma_recv {
 	struct ibv_recv_wr			wr;
 	#ifdef LANTENCY_LOG
-	uint64_t io_id;
+	uint32_t io_id;
 	#endif
 	struct ibv_sge				sgl[NVMF_DEFAULT_RX_SGE];
 
@@ -232,7 +232,7 @@ struct spdk_nvmf_rdma_request_data {
 struct spdk_nvmf_rdma_request {
 	struct spdk_nvmf_request		req;
 	#ifdef LANTENCY_LOG
-	uint64_t io_id;
+	uint32_t io_id;
 	struct timespec start_time;
 	#endif
 
