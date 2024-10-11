@@ -1706,6 +1706,10 @@ task_complete(struct perf_task *task)
     } else {
         main_task->rep_completed_num = 0;
 		uint32_t io_id = main_task->io_id + g_queue_depth;
+		// 令 IO 操作的 io_id 不为 0
+		if(spdk_unlikely(io_id == 0)){
+			io_id = 1;
+		}
         // 枚举所有副本，检查其 ns 是否 draining
 		// 同时, 更新 io_id, 直接 += g_queue_depth，可以避免和其他 perf_task 冲突
         // TODO: 是否有性能更高的做法？
@@ -1832,11 +1836,12 @@ submit_io_rep(struct worker_thread *worker, int queue_depth)
 {
     struct ns_worker_ctx *ns_ctx = NULL;
     struct perf_task *main_task = NULL;
-    uint32_t io_id = 0;
+    uint32_t io_id = 1;
 
     // [通过修改此处代码逻辑，来实现不同的入队顺序]
     // 先为每个 io 请求生成所有副本，再执行提交
-    // io_id 的编号从 0 开始
+    // io_id 的编号从 1 开始
+	// 编号为 0 的 io_id 代表非 io 任务
     while (queue_depth-- > 0){
         bool is_main = true;
         TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
