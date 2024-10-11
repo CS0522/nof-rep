@@ -164,10 +164,8 @@ struct ns_worker_ctx {
 	struct spdk_histogram_data	*histogram;
 	int				status;
 };
- 
+
 struct perf_task {
-    /* index 记录 task 索引序号。索引序号相同或者相差 g_queue_depth 倍数的 task 内容相同。*/
-    uint32_t index;
 	struct ns_worker_ctx	*ns_ctx;
 	struct iovec		*iovs; /* array of iovecs to transfer. */
 	int			iovcnt; /* Number of iovecs in iovs array. */
@@ -239,7 +237,6 @@ static int g_is_random;
 static uint32_t g_queue_depth;
 static int g_nr_io_queues_per_ns = 1;
 static int g_nr_unused_io_queues;
-// 总时间
 static int g_time_in_sec;
 static uint64_t g_number_ios;
 static uint64_t g_elapsed_time_in_usec;
@@ -271,23 +268,6 @@ static uint8_t g_transport_tos = 0;
 
 static uint32_t g_rdma_srq_size;
 uint8_t *g_psk = NULL;
-
-/**
- * 全局 g_tasks 指针数组保存共享 task
- * perf_task 需要与每个 ns_ctx 关联，
- * 因此保存在 g_tasks 数组中的 task 在取出的时候
- * 需要深拷贝一份新的 task 然后修改 ns_ctx
- */
-static struct perf_task **g_tasks;
-static uint32_t g_num_tasks = 0;
-
-/**
- * 保存随机值数组
- * 如果超过数组长度，进行取余操作
- */
-static uint64_t *g_offset_in_ios;
-static bool *g_is_read;
-static uint32_t g_random_num = 0;
 
 /* When user specifies -Q, some error messages are rate limited.  When rate
  * limited, we only print the error message every g_quiet_count times the
@@ -897,7 +877,6 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 
 	lba = offset_in_ios * entry->io_size_blocks;
 
-    // 不进入
 	if (entry->md_size != 0 && !(entry->io_flags & SPDK_NVME_IO_FLAGS_PRACT)) {
 		if (entry->md_interleave) {
 			mode = DIF_MODE_DIF;
@@ -912,8 +891,6 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 		ns_ctx->u.nvme.last_qpair = 0;
 	}
 
-    // 不进入
-    // mode = NONE
 	if (mode != DIF_MODE_NONE) {
 		dif_opts.size = SPDK_SIZEOF(&dif_opts, dif_pi_format);
 		dif_opts.dif_pi_format = SPDK_DIF_PI_FORMAT_16;
@@ -927,37 +904,23 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 		}
 	}
 
-    // myprint
-    // printf("*** 提交 IO 任务 task->index = %u ***\n", task->index);
-    // printf("    task->ns_ctx->entry->name = %s\n", task->ns_ctx->entry->name);
-
-    // printf("    offset_in_ios = %lu\n", offset_in_ios);
-    // printf("    lba = %lu\n", lba);
-    // printf("    lba_count = entry->io_size_blocks = %u\n", entry->io_size_blocks);
-    // printf("    buffer = task->iovs[0].iov_base = %#p\n", task->iovs[0].iov_base);
-    // printf("    metadata = task->md_iov.iov_base = %#p\n", task->md_iov.iov_base);
-    // printf("    diff_mode = %d (0 = NONE)\n", mode);
-    // printf("    task->dif_ctx.apptag_mask = %u\n", task->dif_ctx.apptag_mask);
-    // printf("    task->dif_ctx.app_tag = %u\n", task->dif_ctx.app_tag);
-
 	if (task->is_read) {
 		if (task->iovcnt == 1) {
-			return spdk_nvme_ns_cmd_read_with_md_task_index(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+			return spdk_nvme_ns_cmd_read_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							     task->iovs[0].iov_base, task->md_iov.iov_base,
 							     lba,
 							     entry->io_size_blocks, io_complete,
-							     task, task->index, entry->io_flags,
+							     task, entry->io_flags,
 							     task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
 		} else {
-			return spdk_nvme_ns_cmd_readv_with_md_task_index(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+			return spdk_nvme_ns_cmd_readv_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							      lba, entry->io_size_blocks,
-							      io_complete, task, task->index, entry->io_flags,
+							      io_complete, task, entry->io_flags,
 							      nvme_perf_reset_sgl, nvme_perf_next_sge,
 							      task->md_iov.iov_base,
 							      task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
 		}
 	} else {
-        // 不进入
 		switch (mode) {
 		case DIF_MODE_DIF:
 			rc = spdk_dif_generate(task->iovs, task->iovcnt, entry->io_size_blocks, &task->dif_ctx);
@@ -979,16 +942,16 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 		}
 
 		if (task->iovcnt == 1) {
-			return spdk_nvme_ns_cmd_write_with_md_task_index(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+			return spdk_nvme_ns_cmd_write_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							      task->iovs[0].iov_base, task->md_iov.iov_base,
 							      lba,
 							      entry->io_size_blocks, io_complete,
-							      task, task->index, entry->io_flags,
+							      task, entry->io_flags,
 							      task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
 		} else {
-			return spdk_nvme_ns_cmd_writev_with_md_task_index(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+			return spdk_nvme_ns_cmd_writev_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							       lba, entry->io_size_blocks,
-							       io_complete, task, task->index, entry->io_flags,
+							       io_complete, task, entry->io_flags,
 							       nvme_perf_reset_sgl, nvme_perf_next_sge,
 							       task->md_iov.iov_base,
 							       task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
@@ -1521,40 +1484,6 @@ register_ctrlr(struct spdk_nvme_ctrlr *ctrlr, struct trid_entry *trid_entry)
 	}
 }
 
-static inline uint64_t
-get_min_size_in_ios(void)
-{
-    struct ns_entry *entry_tmp = TAILQ_FIRST(&g_namespaces);
-    uint64_t min_size_in_ios = entry_tmp->size_in_ios;
-    TAILQ_FOREACH(entry_tmp, &g_namespaces, link)
-    {
-        min_size_in_ios = spdk_min(min_size_in_ios, entry_tmp->size_in_ios);
-    }
-    return min_size_in_ios;
-}
-
-static inline void
-update_g_random_array(uint32_t random_num)
-{
-    // 按照min_size_in_ios 计算，防止 offset 越界
-    uint64_t min_size_in_ios = get_min_size_in_ios();
-
-    srand((unsigned int)time(NULL));
-    uint32_t i = 0;
-    for (; i < random_num; ++i)
-    {
-        // 设置 offset_in_ios 随机值
-        g_offset_in_ios[i] = rand() % min_size_in_ios;
-        // 设置 is_read 随机值
-        if ((g_rw_percentage == 100) ||
-	        (g_rw_percentage != 0 && ((rand() % 100) < g_rw_percentage))) {
-		    g_is_read[i] = true;
-	    } else {
-		    g_is_read[i] = false;
-	    }
-    }
-}
-
 static inline void
 submit_single_io(struct perf_task *task)
 {
@@ -1563,41 +1492,31 @@ submit_single_io(struct perf_task *task)
 	struct ns_worker_ctx	*ns_ctx = task->ns_ctx;
 	struct ns_entry		*entry = ns_ctx->entry;
 
-    uint64_t min_size_in_ios = get_min_size_in_ios();
-
 	assert(!ns_ctx->is_draining);
 
-    if (entry->zipf) {
-	    offset_in_ios = spdk_zipf_generate(entry->zipf);
+	if (entry->zipf) {
+		offset_in_ios = spdk_zipf_generate(entry->zipf);
 	} else if (g_is_random) {
-		offset_in_ios = g_offset_in_ios[task->index % g_random_num];
+		offset_in_ios = rand_r(&entry->seed) % entry->size_in_ios;
 	} else {
 		offset_in_ios = ns_ctx->offset_in_ios++;
-		if (ns_ctx->offset_in_ios == min_size_in_ios) {
+		if (ns_ctx->offset_in_ios == entry->size_in_ios) {
 			ns_ctx->offset_in_ios = 0;
 		}
 	}
 
-    if (g_is_random)
-    {
-        task->is_read = g_is_read[task->index % g_random_num];
-    }
-    else
-    {
-        if ((g_rw_percentage == 100) ||
-	        (g_rw_percentage != 0 && ((rand_r(&entry->seed) % 100) < g_rw_percentage))) {
-	    	task->is_read = true;
-	    } else {
-	    	task->is_read = false;
-	    }
-    }
-
 	task->submit_tsc = spdk_get_ticks();
+
+	if ((g_rw_percentage == 100) ||
+	    (g_rw_percentage != 0 && ((rand_r(&entry->seed) % 100) < g_rw_percentage))) {
+		task->is_read = true;
+	} else {
+		task->is_read = false;
+	}
 
 	rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
 
 	if (spdk_unlikely(rc != 0)) {
-        // g_continue_on_error = false
 		if (g_continue_on_error) {
 			/* We can't just resubmit here or we can get in a loop that
 			 * stack overflows. */
@@ -1655,16 +1574,11 @@ task_complete(struct perf_task *task)
 	 * replace the one just completed.
 	 */
 	if (spdk_unlikely(ns_ctx->is_draining)) {
-        /** 事后统一回收 g_tasks */
-        // // myprint
-        // printf("进入 ns_ctx->is_draining...\n");
-        // spdk_dma_free(task->iovs[0].iov_base);
-		// free(task->iovs);
-		// spdk_dma_free(task->md_iov.iov_base);
-        // free(task);
+		spdk_dma_free(task->iovs[0].iov_base);
+		free(task->iovs);
+		spdk_dma_free(task->md_iov.iov_base);
+		free(task);
 	} else {
-        // 修改 task->index，避免 task->index 多次重复使用，不方便统计
-        task->index += g_queue_depth;
 		submit_single_io(task);
 	}
 }
@@ -1697,7 +1611,7 @@ io_complete(void *ctx, const struct spdk_nvme_cpl *cpl)
 }
 
 static struct perf_task *
-allocate_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int task_index)
+allocate_task(struct ns_worker_ctx *ns_ctx, int queue_depth)
 {
 	struct perf_task *task;
 
@@ -1711,77 +1625,20 @@ allocate_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int task_index)
 
 	task->ns_ctx = ns_ctx;
 
-    task->index = task_index;
-
-    // myprint
-    // printf("*** 创建 IO 任务 task->index = %u ***\n", task->index);
-    // printf("    task->ns_ctx->entry->name = %s\n", task->ns_ctx->entry->name);
-
-    // printf("    buffer = task->iovs[0].iov_base = %#p\n", task->iovs[0].iov_base);
-    // printf("    metadata = task->md_iov.iov_base = %#p\n", task->md_iov.iov_base);
-
 	return task;
 }
 
-static struct perf_task *
-deep_copy_task(struct perf_task *old_task, struct ns_worker_ctx *ns_ctx)
+static void
+submit_io(struct ns_worker_ctx *ns_ctx, int queue_depth)
 {
-    if (!old_task)
-    {
-        fprintf(stderr, "Task is empty\n");
-        return NULL;
-    }
-    struct perf_task *task_copy = calloc(1, sizeof(struct perf_task));
-    if (!task_copy)
-    {
-        fprintf(stderr, "Out of memory allocating task_copy\n");
-        exit(1);
-    }
-    // 手动复制所有字段
-    task_copy->ns_ctx = ns_ctx;
-    task_copy->is_read = old_task->is_read;
-    task_copy->iovcnt = old_task->iovcnt;
-    task_copy->iovs = calloc(task_copy->iovcnt, sizeof(struct iovec));
-    task_copy->iovs->iov_base = old_task->iovs->iov_base;
-    task_copy->iovs->iov_len = old_task->iovs->iov_len;
-    task_copy->iovpos = old_task->iovpos;
-    task_copy->iov_offset = old_task->iov_offset;
-    task_copy->md_iov = old_task->md_iov;
-    task_copy->index = old_task->index;
+	struct perf_task *task;
 
-    // myprint
-    // 验证 task_copy
-    // printf("task_copy->index = %d, old_task->index = %d\n", task_copy->index, old_task->index);
-    // printf("task_copy->ns_ctx pointer's addr = %#X, old_task->ns_ctx pointer's addr = %#X\n", &task_copy->ns_ctx, &old_task->ns_ctx);
-    // printf("task_copy->entry->name = %s, old_task->entry->name = %s\n", task_copy->ns_ctx->entry->name, old_task->ns_ctx->entry->name);
-    // printf("task_copy->iovs pointer's addr = %#X, old_task->iovs pointer's addr = %#X\n", &task_copy->iovs, &old_task->iovs);
-    // printf("task_copy->iovs' addr = %#X, old_task->iovs' addr = %#X\n", task_copy->iovs, old_task->iovs);
-    // printf("task_copy->iovs->iov_base's addr = %#X, old_task->iovs->iov_base's addr = %#X\n", task_copy->iovs->iov_base, old_task->iovs->iov_base);
-    // printf("task_copy->is_read = %d, old_task->is_read = %d\n", task_copy->is_read, old_task->is_read);
-
-    return task_copy;
+	while (queue_depth-- > 0) {
+		task = allocate_task(ns_ctx, queue_depth);
+		submit_single_io(task);
+	}
 }
 
-/**
- * 在下发 IO 之前要修改 task 关联的 ns_ctx
- */
-static void 
-custom_submit_io(struct ns_worker_ctx *ns_ctx, int queue_depth)
-{
-    struct perf_task *task;
-    while (queue_depth > 0)
-    {
-        /**
-         * 深拷贝 task 后修改关联的 ns_ctx
-         * 深拷贝避免修改 g_tasks 数组中的指针，
-         * 否则可能会造成各个线程之间的指针相互影响
-         */
-        task = deep_copy_task(g_tasks[g_queue_depth - queue_depth], ns_ctx);
-        --queue_depth;
-        submit_single_io(task);
-    }
-}
- 
 static int
 init_ns_worker_ctx(struct ns_worker_ctx *ns_ctx)
 {
@@ -1906,13 +1763,10 @@ work_fn(void *arg)
 		tsc_end = tsc_current + g_time_in_sec * g_tsc_rate;
 	}
 
-    // assert(g_num_tasks == g_queue_depth);
-    // rc = pthread_barrier_wait(&g_worker_sync_barrier);
-
-    TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link)
-    {
-        custom_submit_io(ns_ctx, g_queue_depth);
-    }
+	/* Submit initial I/O for each namespace. */
+	TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
+		submit_io(ns_ctx, g_queue_depth);
+	}
 
 	while (spdk_likely(!g_exit)) {
 		bool all_draining = true;
@@ -1923,7 +1777,6 @@ work_fn(void *arg)
 		 * to replace each I/O that is completed.
 		 */
 		TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
-            // 不进入
 			if (g_continue_on_error && !ns_ctx->is_draining) {
 				/* Submit any I/O that is queued up */
 				TAILQ_INIT(&swap);
@@ -2038,21 +1891,15 @@ usage(char *program_name)
 #endif
 	printf("\n\n");
 	printf("==== BASIC OPTIONS ====\n\n");
-    // (val/3) depth for each qp
 	printf("\t-q, --io-depth <val> io depth\n");
-    // 4096 Bytes
 	printf("\t-o, --io-size <val> io size in bytes\n");
-    // randrw
 	printf("\t-w, --io-pattern <pattern> io pattern type, must be one of\n");
 	printf("\t\t(read, write, randread, randwrite, rw, randrw)\n");
-    // 50
 	printf("\t-M, --rwmixread <0-100> rwmixread (100 for reads, 0 for writes)\n");
-    // run time
 	printf("\t-t, --time <sec> time in seconds\n");
 	printf("\t-a, --warmup-time <sec> warmup time in seconds\n");
 	printf("\t-c, --core-mask <mask> core mask for I/O submission/completion.\n");
 	printf("\t\t(default: 1)\n");
-    // rdma ipv4 addr port
 	printf("\t-r, --transport <fmt> Transport ID for local PCIe NVMe or NVMeoF\n");
 	printf("\t\t Format: 'key:value [key:value] ...'\n");
 	printf("\t\t Keys:\n");
@@ -2072,8 +1919,7 @@ usage(char *program_name)
 	printf("\t--use-every-core for each namespace, I/Os are submitted from all cores\n");
 	printf("\t--io-queue-size <val> size of NVMe IO queue. Default: maximum allowed by controller\n");
 	printf("\t-O, --io-unit-size io unit size in bytes (4-byte aligned) for SPDK driver. default: same as io size\n");
-	// 3 QP for 3 Target, 1 - 1 mapping
-    printf("\t-P, --num-qpairs <val> number of io queues per namespace. default: 1\n");
+	printf("\t-P, --num-qpairs <val> number of io queues per namespace. default: 1\n");
 	printf("\t-U, --num-unused-qpairs <val> number of unused io queues per controller. default: 0\n");
 	printf("\t-A, --buffer-alignment IO buffer alignment. Must be power of 2 and not less than cache line (%u)\n",
 	       SPDK_CACHE_LINE_SIZE);
@@ -2129,21 +1975,17 @@ usage(char *program_name)
 
 	printf("==== LOGGING ====\n\n");
 	printf("\t-L, --enable-sw-latency-tracking enable latency tracking via sw, default: disabled\n");
-	// -LL
-    printf("\t\t-L for latency summary, -LL for detailed histogram\n");
-	// -l
-    printf("\t-l, --enable-ssd-latency-tracking enable latency tracking via ssd (if supported), default: disabled\n");
+	printf("\t\t-L for latency summary, -LL for detailed histogram\n");
+	printf("\t-l, --enable-ssd-latency-tracking enable latency tracking via ssd (if supported), default: disabled\n");
 	printf("\t-N, --no-shst-notification no shutdown notification process for controllers, default: disabled\n");
 	printf("\t-Q, --continue-on-error <val> Do not stop on error. Log I/O errors every N times (default: 1)\n");
 	spdk_log_usage(stdout, "\t-T");
 	printf("\t-m, --cpu-usage display real-time overall cpu usage on used cores\n");
 #ifdef DEBUG
-    // -G
 	printf("\t-G, --enable-debug enable debug logging\n");
 #else
 	printf("\t-G, --enable-debug enable debug logging (flag disabled, must reconfigure with --enable-debug)\n");
 #endif
-    // --transport-stats
 	printf("\t--transport-stats dump transport statistics\n");
 	printf("\n\n");
 }
@@ -3280,10 +3122,6 @@ associate_workers_with_ns(void)
 		return 0;
 	}
 
-    // myprint
-    // printf("g_num_namespaces = %d, g_num_workers = %d\n", g_num_namespaces, g_num_workers);
-    // n : 1
-
 	count = g_num_namespaces > g_num_workers ? g_num_namespaces : g_num_workers;
 
 	for (i = 0; i < count; i++) {
@@ -3372,6 +3210,8 @@ setup_sig_handlers(void)
 int
 main(int argc, char **argv)
 {
+    printf("========== perf ==========\n");
+    
 	int rc;
 	struct worker_thread *worker, *main_worker;
 	struct ns_worker_ctx *ns_ctx;
@@ -3467,29 +3307,6 @@ main(int argc, char **argv)
 
 	printf("Initialization complete. Launching workers.\n");
 
-    /**
-     * 1. 由主线程创建 task
-     * 2. 保存在全局的 tasks 数组中，这样所有 worker 都可以取得相同 task
-     */
-    g_random_num = 2 * g_queue_depth;
-    g_tasks = (struct perf_task**)malloc(g_queue_depth * sizeof(struct perf_task*));
-    g_offset_in_ios = (uint64_t*)malloc(g_random_num * sizeof(uint64_t));
-    g_is_read = (bool*)malloc(g_random_num * sizeof(bool));
-    uint32_t queue_depth = g_queue_depth;
-    // 一定需要一个 ns_ctx，所以取第一个 ns_ctx。之后会复制一份 task 然后修改指针
-    struct worker_thread *worker_tmp = TAILQ_FIRST(&g_workers);
-    struct ns_worker_ctx *ns_ctx_tmp = TAILQ_FIRST(&worker_tmp->ns_ctx);
-    while (queue_depth > 0)
-    {
-        g_tasks[g_num_tasks] = allocate_task(ns_ctx_tmp, queue_depth--, g_num_tasks);
-        ++g_num_tasks;
-    }
-    // 赋值随机数
-    update_g_random_array(g_random_num);
-    // myprint
-    // printf("g_num_tasks = %d, g_queue_depth = %d\n", g_num_tasks, g_queue_depth);
-    assert(g_num_tasks == g_queue_depth);
-
 	/* Launch all of the secondary workers */
 	g_main_core = spdk_env_get_current_core();
 	main_worker = NULL;
@@ -3513,15 +3330,6 @@ main(int argc, char **argv)
 
 cleanup:
 	fflush(stdout);
-
-    // 释放 tasks 和 buffer
-    while (g_num_tasks-- > 0)
-    {
-        spdk_dma_free(g_tasks[g_num_tasks]->iovs[0].iov_base);
-		free(g_tasks[g_num_tasks]->iovs);
-		spdk_dma_free(g_tasks[g_num_tasks]->md_iov.iov_base);
-    }
-    free(g_tasks);
 
 	if (thread_id && pthread_cancel(thread_id) == 0) {
 		pthread_join(thread_id, NULL);
