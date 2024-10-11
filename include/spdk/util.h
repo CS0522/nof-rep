@@ -16,6 +16,7 @@
 #include "spdk/stdinc.h"
 
 #define LANTENCY_LOG
+#define APP_THREAD_EXCLUSIVE_REACTOR
 
 #ifdef LANTENCY_LOG
 #define LOGFILEPATH "./log_latency_file.csv"
