@@ -6,7 +6,7 @@
 
 char log_temp_char[MAX_CHAR_CACHE];
 
-void write_log_to_file(uint64_t io_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish){
+void write_log_to_file(uint32_t io_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish){
 	static uint64_t log_num = 0;
 	if(log_num == 0){
 		memset(log_temp_char, 0, MAX_CHAR_CACHE);
@@ -23,7 +23,7 @@ void write_log_to_file(uint64_t io_id, const char* module, struct timespec start
 		}
 	}else{
 		log_num++;
-		sprintf(log_temp_char, "%s%llu,%s,%llu:%llu,%llu:%llu\n", log_temp_char, io_id, module, start_time.tv_sec, start_time.tv_nsec, end_time.tv_sec, end_time.tv_nsec);
+		sprintf(log_temp_char, "%s%u,%s,%llu:%llu,%llu:%llu\n", log_temp_char, io_id, module, start_time.tv_sec, start_time.tv_nsec, end_time.tv_sec, end_time.tv_nsec);
 		if(log_num == UPDATE_PERIOD){
 			FILE* file = fopen(LOGFILEPATH, "w+");
 			fprintf(file, "%s", log_temp_char);

@@ -22,13 +22,13 @@
 #define LOGFILEPATH "./log_latency_file.csv"
 
 struct latency_log_ctx{
-	uint64_t io_id;
+	uint32_t io_id;
 	const char* module;
 	struct timespec start_time;
 	struct timespec end_time;
 };
 
-void write_log_to_file(uint64_t wr_id, const char* module, struct timespec start_time, struct timespec end_time);
+void write_log_to_file(uint32_t io_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish);
 
 void write_latency_log(void* ctx);
 #endif

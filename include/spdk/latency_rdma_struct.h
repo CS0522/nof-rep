@@ -24,7 +24,7 @@ struct spdk_nvmf_rdma_wr {
 struct spdk_nvmf_rdma_recv {
 	struct ibv_recv_wr			wr;
 	#ifdef LANTENCY_LOG
-	uint64_t io_id;
+	uint32_t io_id;
 	#endif
 	struct ibv_sge				sgl[NVMF_DEFAULT_RX_SGE];
 
@@ -47,7 +47,7 @@ struct spdk_nvmf_rdma_request_data {
 struct spdk_nvmf_rdma_request {
 	struct spdk_nvmf_request		req;
 	#ifdef LANTENCY_LOG
-	uint64_t io_id;
+	uint32_t io_id;
 	struct timespec start_time;
 	#endif
 
