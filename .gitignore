@@ -18,3 +18,4 @@
 Makefile
 *.md
 !.gitignore
+!/lib/util/Makefile
