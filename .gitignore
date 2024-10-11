@@ -17,5 +17,6 @@
 *.mk
 Makefile
 !/app/spdk_nvme_perf/Makefile
+!/lib/util/Makefile
 *.md
 !.gitignore
