@@ -26,6 +26,14 @@
 #include "spdk/zipf.h"
 #include "spdk/nvmf.h"
 
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <time.h>
+
 #ifdef SPDK_CONFIG_URING
 #include <liburing.h>
 #endif
@@ -201,6 +209,23 @@ struct perf_task {
     struct perf_task *main_task;
     TAILQ_HEAD(, perf_task)	rep_tasks;
     uint32_t rep_completed_num;
+
+    int is_main_task;
+    /* for recording timestamps */
+    // submit_time - create_time = queued_time
+    // 创建副本 task 的时间（创建完 task 后可能需要排队）
+    struct timespec create_time;
+    // 提交副本 task 的时间（提交 task 并要发送 nvme 请求的时间）
+    struct timespec submit_time;
+    // 该副本 task 结束的时间
+    struct timespec complete_time;
+};
+
+struct msg_buf
+{
+    long mtype;
+    // msg 内容本体
+    struct latency_log_tasks_head latency_log_tasks;
 };
 
 struct worker_thread {
@@ -298,6 +323,10 @@ uint8_t *g_psk = NULL;
  * TODO: 后续需要添加支持用 option 来修改
  */
 static uint32_t g_rep_num = 3;
+/** 消息队列 id */
+static int g_msgid = 0;
+// 用来保存 ns 和 ns_index 映射，ns_index 为数组下标
+static char **g_ns_name;
 
 /* When user specifies -Q, some error messages are rate limited.  When rate
  * limited, we only print the error message every g_quiet_count times the
@@ -936,6 +965,10 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 			exit(1);
 		}
 	}
+
+    // 记录 task 提交时间
+    // 如果被排队，task 本轮最后一次提交也会再次更新 submit_time
+    clock_gettime(CLOCK_REALTIME, &task->submit_time);
 
     // myprint
     // printf("*** 提交 IO 任务 task->io_id = %u ***\n", task->io_id);
@@ -1616,6 +1649,8 @@ submit_single_io_rep(struct perf_task *main_task)
         task->submit_tsc = spdk_get_ticks();
         task->offset_in_ios = offset_in_ios;
         task->is_read = is_read;
+        // 为每个 task 记录创建 io 时间
+        clock_gettime(CLOCK_REALTIME, &task->create_time);
         ns_ctx = task->ns_ctx;
         entry = ns_ctx->entry;
         rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
@@ -1693,6 +1728,10 @@ task_complete(struct perf_task *task)
 		/* add application level verification for end-to-end data protection */
 		entry->fn_table->verify_io(task, entry);
 	}
+    
+    // 记录每个副本 task 结束的时间
+    clock_gettime(CLOCK_REALTIME, &task->complete_time);
+
     /**
      * 副本任务进行同步，仅当所有副本全部完成时，
      * 1. 回收所有副本
@@ -1703,7 +1742,53 @@ task_complete(struct perf_task *task)
     ++ main_task->rep_completed_num;
     if (main_task->rep_completed_num < g_rep_num){
         return ;
-    } else {
+    } else { // 本轮任务完成
+        // 获取统一的 IO 任务完成时间
+        struct timespec all_complete_time;
+        clock_gettime(CLOCK_REALTIME, &all_complete_time);
+        
+        /** 写日志 */
+        // 1. 构建关于 latency_log_task_ctx 的尾队列，维护副本的关联关系。即一个尾队列 n 个副本同属于一个 IO
+        // TODO single list 开销更小？
+        struct msg_buf send_msg;
+        send_msg.mtype = 1;
+        TAILQ_INIT(&send_msg.latency_log_tasks);
+        struct perf_task *t_task = NULL;
+        // 2. 遍历每个 rep_tasks，加入到尾队列中
+        TAILQ_FOREACH(t_task, &main_task->rep_tasks, link)
+        {
+            struct latency_log_task_ctx *latency_log_task = calloc(1, sizeof(struct latency_log_task_ctx));
+            latency_log_task->io_id = t_task->io_id;
+            latency_log_task->is_main_task = t_task->is_main_task ? 1 : 0;
+            sprintf(latency_log_task->ns_entry_name, t_task->ns_ctx->entry->name);
+            latency_log_task->create_time = t_task->create_time;
+            latency_log_task->submit_time = t_task->submit_time;
+            latency_log_task->complete_time = t_task->complete_time;
+            latency_log_task->all_complete_time = all_complete_time;
+
+            TAILQ_INSERT_TAIL(&send_msg.latency_log_tasks, latency_log_task, link);
+        }
+        // 3. 发送 msg
+        if (msgsnd(g_msgid, &send_msg, sizeof(send_msg.latency_log_tasks), 0) == -1)
+        {
+            fprintf(stderr, "Failed to send msg to log writing process\n");
+            // exit(EXIT_FAILURE);
+        }
+
+        // myprint
+        // printf("Message sent: \n");
+        // struct latency_log_task_ctx *lltc_t = NULL;
+        // TAILQ_FOREACH(lltc_t, &send_msg.latency_log_tasks, link)
+        // {
+        //     printf("*** log_task->io_id = %u ***\n", lltc_t->io_id);
+        //     printf("    log_task->is_main_task = %d\n", lltc_t->is_main_task);
+        //     printf("    log_task->ns_entry_name = %s\n", lltc_t->ns_entry_name);
+        //     printf("    log_task->create_time = %llu:%llu\n", lltc_t->create_time.tv_sec, lltc_t->create_time.tv_nsec);
+        //     printf("    log_task->submit_time = %llu:%llu\n", lltc_t->submit_time.tv_sec, lltc_t->submit_time.tv_nsec);
+        //     printf("    log_task->complete_time = %llu:%llu\n", lltc_t->complete_time.tv_sec, lltc_t->complete_time.tv_nsec);
+        //     printf("    log_task->all_complete_time = %llu:%llu\n\n", lltc_t->all_complete_time.tv_sec, lltc_t->all_complete_time.tv_nsec);
+        // }
+
         main_task->rep_completed_num = 0;
 		uint32_t io_id = main_task->io_id + g_queue_depth;
 		// 令 IO 操作的 io_id 不为 0
@@ -1713,7 +1798,7 @@ task_complete(struct perf_task *task)
         // 枚举所有副本，检查其 ns 是否 draining
 		// 同时, 更新 io_id, 直接 += g_queue_depth，可以避免和其他 perf_task 冲突
         // TODO: 是否有性能更高的做法？
-        struct perf_task *t_task = NULL;
+        t_task = NULL;
         TAILQ_FOREACH(t_task, &main_task->rep_tasks, link){
             if (spdk_unlikely(t_task->ns_ctx->is_draining)) {
                 rep_task_release(main_task);
@@ -1773,6 +1858,7 @@ allocate_main_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
     TAILQ_INSERT_TAIL(&task->rep_tasks, task, link);
     task->main_task = task;
     task->rep_completed_num = 0;
+    task->is_main_task = 1;
 
     // myprint
     // printf("*** 创建 IO 任务 task->io_id = %u ***\n", task->io_id);
@@ -1807,6 +1893,9 @@ copy_task(struct perf_task *main_task, struct ns_worker_ctx *ns_ctx)
     task_copy->io_id = main_task->io_id;
     // 主副本变量指向 main_task
     task_copy->main_task = main_task;
+    // 从副本 task 不需要记录创建时间
+    // task_copy->create_time = main_task->create_time;
+    task_copy->is_main_task = 0;
     // 插入到副本队列中
     TAILQ_INSERT_TAIL(&main_task->rep_tasks, task_copy, link);
 
@@ -2102,6 +2191,8 @@ usage(char *program_name)
 #endif
 	printf("\n\n");
 	printf("==== BASIC OPTIONS ====\n\n");
+    // 添加 副本个数 参数
+    printf("\t-n, --rep-num <val> replica num of tasks\n");
     // (val/3) depth for each qp
 	printf("\t-q, --io-depth <val> io depth\n");
     // 4096 Bytes
@@ -2623,9 +2714,12 @@ parse_metadata(const char *metacfg_str)
 	return 0;
 }
 
-#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:"
+#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:n:"
 
 static const struct option g_perf_cmdline_opts[] = {
+// 添加 副本个数 参数
+#define PERF_REP_NUM    'n'
+    {"rep-num",     required_argument, NULL, PERF_REP_NUM},
 #define PERF_WARMUP_TIME	'a'
 	{"warmup-time",			required_argument,	NULL, PERF_WARMUP_TIME},
 #define PERF_ALLOWED_PCI_ADDR	'b'
@@ -2745,6 +2839,8 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 
 	while ((op = getopt_long(argc, argv, PERF_GETOPT_SHORT, g_perf_cmdline_opts, &long_idx)) != -1) {
 		switch (op) {
+        // 添加 副本个数 参数
+        case PERF_REP_NUM:
 		case PERF_WARMUP_TIME:
 		case PERF_SHMEM_GROUP_ID:
 		case PERF_MAX_COMPLETIONS_PER_POLL:
@@ -2763,6 +2859,9 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 				return val;
 			}
 			switch (op) {
+            case PERF_REP_NUM:
+                g_rep_num = val;
+                break;
 			case PERF_WARMUP_TIME:
 				g_warmup_time_in_sec = val;
 				break;
@@ -3433,6 +3532,118 @@ setup_sig_handlers(void)
 	return 0;
 }
 
+/* 封装写日志函数 */
+static void
+process_write_latency_log(struct latency_log_tasks_head* latency_log_tasks)
+{
+    /* latency_log_tasks 中包含 n 个 log，是同一个 IO 的 n 个副本 */
+    
+    write_latency_tasks_log(latency_log_tasks, g_ns_name, g_rep_num);
+}
+
+/* 处理消息队列 */
+static void
+process_msg_recv(int msgid)
+{
+    struct msg_buf recv_msg;
+    struct msqid_ds msg_info;
+    int msg_cnt;
+
+    /* TODO 通过超时来退出无限循环 */
+    int zero_msg_cnt = 0;
+    while (1)
+    {
+        if (msgctl(msgid, IPC_STAT, &msg_info) == -1)
+        {
+            fprintf(stderr, "Failed to get msg queue info\n");
+            exit(EXIT_FAILURE);
+        }
+        // myprint
+        printf("Msg queue num: %lu\n", msg_info.msg_qnum);
+
+        msg_cnt = msg_info.msg_qnum;
+        if (!msg_cnt)
+        {
+            if (++zero_msg_cnt > 5)
+                // 退出循环、停止处理消息队列
+                return;
+            continue;
+        }
+        else
+            zero_msg_cnt = 0;
+
+        while (msg_cnt-- > 0)
+        {   
+            // 1. 拉取消息
+            if (msgrcv(msgid, &recv_msg, sizeof(recv_msg.latency_log_tasks), 0, 0) == -1)
+            {
+                fprintf(stderr, "Failed to retrieve the messages\n");
+                // exit(EXIT_FAILURE);
+            }
+            
+            // myprint
+            // printf("Message received: \n");
+            // struct latency_log_task_ctx *lltc_t = NULL;
+            // TAILQ_FOREACH(lltc_t, &recv_msg.latency_log_tasks, link)
+            // {
+            //     printf("*** log_task->io_id = %u ***\n", lltc_t->io_id);
+            //     printf("    log_task->is_main_task = %d\n", lltc_t->is_main_task);
+            //     printf("    log_task->ns_entry_name = %s\n", lltc_t->ns_entry_name);
+            //     printf("    log_task->create_time = %llu:%llu\n", lltc_t->create_time.tv_sec, lltc_t->create_time.tv_nsec);
+            //     printf("    log_task->submit_time = %llu:%llu\n", lltc_t->submit_time.tv_sec, lltc_t->submit_time.tv_nsec);
+            //     printf("    log_task->complete_time = %llu:%llu\n", lltc_t->complete_time.tv_sec, lltc_t->complete_time.tv_nsec);
+            //     printf("    log_task->all_complete_time = %llu:%llu\n\n", lltc_t->all_complete_time.tv_sec, lltc_t->all_complete_time.tv_nsec);
+            // }
+
+            // 2. 处理写日志
+            process_write_latency_log(&recv_msg.latency_log_tasks);
+        }
+
+        // 间隔 n 秒取处理一次消息队列
+        sleep(1);
+    }
+}
+
+/* 子进程执行函数 */
+static
+child_process_fn(int msgid)
+{
+    // myprint
+    printf("Get into child process %d\n", getpid());
+    printf("Msg queue with msgid %d\n", msgid);
+
+    process_msg_recv(msgid);
+}
+
+/* 建立 ns_name 和 ns_index 映射 */
+static void
+init_ns_name_index_mapping(void)
+{
+    // 这里假定每个 target 只有 1 个 ns 的情况下
+    // 如果每个 target 有多个 ns，则需要修改代码
+    assert(g_rep_num == g_num_namespaces);
+    // g_ns_name: n * 1024
+    g_ns_name = (char **)malloc(g_num_namespaces * sizeof(char *));
+    uint32_t ns_cnt = 0;
+    struct ns_entry *entry_tmp;
+    TAILQ_FOREACH(entry_tmp, &g_namespaces, link)
+    {
+        g_ns_name[ns_cnt] = (char *)malloc(1024 * sizeof(char));
+        // 通过 IP 地址判断是否为某个 ns，这样在后面 strcmp 时减少时间开销
+        printf("entry_tmp->name: %s\n", entry_tmp->name);
+        sscanf(entry_tmp->name, "RDMA (addr:%s subnqn:", g_ns_name[ns_cnt]);
+
+        ++ns_cnt;
+    }
+    assert(ns_cnt == g_num_namespaces);
+
+    // myprint
+    printf("namespaces mapping: \n");
+    for (int i = 0; i < ns_cnt; ++i)
+        printf("%d: %s\n", i, g_ns_name[i]);
+}
+
+
 int
 main(int argc, char **argv)
 {
@@ -3525,13 +3736,49 @@ main(int argc, char **argv)
 		goto cleanup;
 	}
 
+    // myprint
+    printf("g_rep_num = %d\n", g_rep_num);
+
 	rc = pthread_barrier_init(&g_worker_sync_barrier, NULL, g_num_workers);
 	if (rc != 0) {
 		fprintf(stderr, "Unable to initialize thread sync barrier\n");
 		goto cleanup;
 	}
 
-	printf("Initialization complete. Launching workers.\n");
+    /* 建立 ns 和 ns_index 的映射 */
+    init_ns_name_index_mapping();
+
+    /* 创建消息队列 */
+    g_msgid = msgget(IPC_PRIVATE, 0755);
+    if (g_msgid == -1)
+    {
+        fprintf(stderr, "Unable to create a msg queue\n");
+        exit(EXIT_FAILURE);
+    }
+    // myprint
+    printf("Create a msg queue with msgid %d\n", g_msgid);
+
+    /* 创建子进程来写日志 */
+    pid_t pid = fork();
+    if (pid < 0)
+    {
+        fprintf(stderr, "Unable to create a log writing process\n");
+        exit(EXIT_FAILURE);
+    }
+    // child process
+    else if (pid == 0)
+    {
+        child_process_fn(g_msgid);
+        // 不执行 cleanup
+        return 0;
+    }
+
+    // parent process
+
+    // myprint
+    printf("Create a child process %d to write log file.\n", pid);
+
+    printf("Initialization complete. Launching workers.\n");
 
 	/* Launch all of the secondary workers */
 	g_main_core = spdk_env_get_current_core();
@@ -3578,6 +3825,39 @@ cleanup:
 	unregister_namespaces();
 	unregister_controllers();
 	unregister_workers();
+
+    int status;
+    int pc;
+    pc = wait(&status);
+    // printf("status = %d\n", WIFEXITED(status));
+    // 正常结束 WIFEXITED(status) != 0
+    if(!WIFEXITED(status))
+    {
+        fprintf(stderr, "Log writing process ended with error\n");
+    }
+
+    /* 删除消息队列 */
+    struct msqid_ds msg_info;
+    if (msgctl(g_msgid, IPC_STAT, &msg_info) == -1)
+    {
+        perror("msgctl");
+        exit(EXIT_FAILURE);
+    }
+    // msg_qnum = 0
+    if (!msg_info.msg_qnum)
+    {
+        if (msgctl(g_msgid, IPC_RMID, NULL) == -1)
+        {
+            perror("msgctl");
+            exit(EXIT_FAILURE);
+        }
+        printf("Msg queue destroyed\n");
+    }
+    // msg_qnum > 0
+    else
+    {
+        process_msg_recv(g_msgid);
+    }
 
 	spdk_env_fini();
 

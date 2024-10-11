@@ -276,6 +276,9 @@ struct nvme_request {
 
 	// cmd.cid 与 rdma_req 绑定
 	struct spdk_nvme_cmd		cmd;
+	#ifdef LANTENCY_LOG
+	struct timespec start_time;
+	#endif
 
 	uint8_t				retries;
 
