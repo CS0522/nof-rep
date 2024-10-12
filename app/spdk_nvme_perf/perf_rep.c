@@ -334,12 +334,14 @@ uint8_t *g_psk = NULL;
  */
 static uint32_t g_rep_num = 3;
 
-// #ifdef PERF_LATENCY_LOG
+#ifdef PERF_LATENCY_LOG
 /** 消息队列 id */
 static int g_msgid = 0;
 // 用来保存 ns 和 ns_index 映射，ns_index 为数组下标
 char **g_ns_name;
-// #endif
+// 记录 IO 任务完成个数
+static unsigned int g_io_completed_num = 0;
+#endif
 
 /* When user specifies -Q, some error messages are rate limited.  When rate
  * limited, we only print the error message every g_quiet_count times the
@@ -1777,6 +1779,7 @@ task_complete(struct perf_task *task)
         // printf("*** IO 任务完毕 io_id = %u ***\n", main_task->io_id);
 
 #ifdef PERF_LATENCY_LOG
+        ++g_io_completed_num;
         // 获取统一的 IO 任务完成时间
         struct timespec all_complete_time;
         clock_gettime(CLOCK_REALTIME, &all_complete_time);
@@ -3681,14 +3684,17 @@ update:
 }
 
 /* 子进程执行函数 */
-static void
-child_process_fn(int msgid)
+static void *
+child_process_fn(void *arg)
 {
+    int msgid = *(int *)arg;
     // myprint
-    printf("Get into log writing process %d\n", getpid());
+    printf("Get into log writing thread %d\n", getpid());
     printf("Msg queue with msgid %d\n", msgid);
 
     process_msg_recv(msgid);
+
+    return NULL;
 }
 
 /* 建立 ns_name 和 ns_index 映射 */
@@ -3833,26 +3839,15 @@ main(int argc, char **argv)
     // myprint
     printf("Create a msg queue with msgid %d\n", g_msgid);
 
-    /* 创建子进程来写日志 */
-    pid_t pid = fork();
-    if (pid < 0)
-    {
-        fprintf(stderr, "Unable to create a log writing process\n");
-        exit(EXIT_FAILURE);
-    }
-    // child process
-    else if (pid == 0)
-    {
-        child_process_fn(g_msgid);
-        // 不执行 cleanup
-        return 0;
-    }
-
-    // parent process
-
+    /* 创建子线程来写日志 */
+    pthread_t log_thread_id = 0;
+    int rc_ = pthread_create(&log_thread_id, NULL, &child_process_fn, &g_msgid);
+    if (rc_ != 0) {
+		fprintf(stderr, "Unable to spawn a thread to write latency log.\n");
+		goto cleanup;
+	}
     // myprint
-    printf("Create a child process %d to write log file.\n", pid);
-    printf("Parent process %d.\n", getpid());
+    printf("Create a thread to write latency log\n");
 #endif
 
     printf("Initialization complete. Launching workers.\n");
@@ -3898,26 +3893,15 @@ cleanup:
 		}
 	}
 
-#ifdef PERF_LATENCY_LOG
-    // myprint
-    printf("Current process: %d\n", getpid());
-#endif
-
 	unregister_trids();
 	unregister_namespaces();
 	unregister_controllers();
 	unregister_workers();
 
 #ifdef PERF_LATENCY_LOG
-    int status;
-    int pc;
-    pc = wait(&status);
-    // printf("status = %d\n", WIFEXITED(status));
-    // 正常结束 WIFEXITED(status) != 0
-    if(!WIFEXITED(status))
-    {
-        fprintf(stderr, "Log writing process ended with error\n");
-    }
+    pthread_join(log_thread_id, NULL);
+
+    printf("IO 任务完成次数: %u\n", g_io_completed_num);
 
     /* 删除消息队列 */
     // 剩余消息数为 0，可以删除消息队列
@@ -3940,7 +3924,7 @@ cleanup:
 	spdk_env_fini();
 
 #ifdef PERF_LATENCY_LOG
-    for (int i = 0; i < 10; ++i)
+    for (int i = 0; i < g_num_namespaces; ++i)
         free(g_ns_name[i]);
     free(g_ns_name);
 #endif
