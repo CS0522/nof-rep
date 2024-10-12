@@ -16,11 +16,13 @@
 #include "spdk/stdinc.h"
 #include "spdk/queue.h"
 
-#define LANTENCY_LOG
+// #define LANTENCY_LOG
+#define APP_THREAD_EXCLUSIVE_REACTOR
+
+#define PERF_LATENCY_LOG
 
 #ifdef LANTENCY_LOG
-#define TARGET_LOG_FILE_PATH "../target_latency_file.csv"
-#define HOST_LOG_FILE_PATH "../host_latency_file.csv"
+#define TARGET_LOG_FILE_PATH "../target_latency_log.csv"
 
 struct latency_log_ctx{
 	uint64_t io_id;
@@ -28,6 +30,14 @@ struct latency_log_ctx{
 	struct timespec start_time;
 	struct timespec end_time;
 };
+
+void write_log_to_file(uint64_t wr_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish);
+
+void write_latency_log(void* ctx);
+#endif
+
+#ifdef PERF_LATENCY_LOG
+#define HOST_LOG_FILE_PATH "../host_latency_log.csv"
 
 /* latency log context for perf task */
 struct latency_log_task_ctx
@@ -55,10 +65,6 @@ struct latency_log_task_ctx
 // 定义一个包含 TAILQ 头结构的结构体 latency_log_tasks_head
 static TAILQ_HEAD(latency_log_tasks_head, latency_log_task_ctx) thead = TAILQ_HEAD_INITIALIZER(thead);
 
-void write_log_to_file(uint64_t wr_id, const char* module, struct timespec start_time, struct timespec end_time);
-
-void write_latency_log(void* ctx);
-
 /* For tasks. */
 
 void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task, 
@@ -67,24 +73,6 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task,
                             int new_line);
 
 void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num);
-#endif
-
-#define LANTENCY_LOG
-#define APP_THREAD_EXCLUSIVE_REACTOR
-
-#ifdef LANTENCY_LOG
-#define LOGFILEPATH "./log_latency_file.csv"
-
-struct latency_log_ctx{
-	uint32_t io_id;
-	const char* module;
-	struct timespec start_time;
-	struct timespec end_time;
-};
-
-void write_log_to_file(uint32_t io_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish);
-
-void write_latency_log(void* ctx);
 #endif
 
 #ifdef __cplusplus

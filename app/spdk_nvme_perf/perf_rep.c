@@ -32,6 +32,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <time.h>
 
 #ifdef SPDK_CONFIG_URING
@@ -224,8 +225,10 @@ struct perf_task {
 struct msg_buf
 {
     long mtype;
-    // msg 内容本体
-    struct latency_log_tasks_head latency_log_tasks;
+    // msg 正文
+    // 测试发现这里可能只能保存在栈内存上
+    // TODO 数量变化的时候如何处理
+    struct latency_log_task_ctx latency_log_tasks[3];
 };
 
 struct worker_thread {
@@ -971,7 +974,7 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
     clock_gettime(CLOCK_REALTIME, &task->submit_time);
 
     // myprint
-    // printf("*** 提交 IO 任务 task->io_id = %u ***\n", task->io_id);
+    printf("*** 提交 IO 任务 task->io_id = %u ***\n", task->io_id);
     // printf("    task->ns_ctx->entry->name = %s\n", task->ns_ctx->entry->name);
 
     // printf("    offset_in_ios = %lu\n", offset_in_ios);
@@ -1743,50 +1746,51 @@ task_complete(struct perf_task *task)
     if (main_task->rep_completed_num < g_rep_num){
         return ;
     } else { // 本轮任务完成
+        // myprint
+        printf("*** IO 任务完毕 task->io_id = %u ***\n", main_task->io_id);
+
         // 获取统一的 IO 任务完成时间
         struct timespec all_complete_time;
         clock_gettime(CLOCK_REALTIME, &all_complete_time);
         
         /** 写日志 */
-        // 1. 构建关于 latency_log_task_ctx 的尾队列，维护副本的关联关系。即一个尾队列 n 个副本同属于一个 IO
-        // TODO single list 开销更小？
+        // 1. 构建关于 latency_log_task_ctx 的数组，维护副本的关联关系。即一个尾队列 n 个副本同属于一个 IO
         struct msg_buf send_msg;
         send_msg.mtype = 1;
-        TAILQ_INIT(&send_msg.latency_log_tasks);
         struct perf_task *t_task = NULL;
-        // 2. 遍历每个 rep_tasks，加入到尾队列中
+        // 2. 遍历每个 rep_tasks，加入到数组中
+        int rep_cnt = 0;
         TAILQ_FOREACH(t_task, &main_task->rep_tasks, link)
         {
-            struct latency_log_task_ctx *latency_log_task = calloc(1, sizeof(struct latency_log_task_ctx));
-            latency_log_task->io_id = t_task->io_id;
-            latency_log_task->is_main_task = t_task->is_main_task ? 1 : 0;
-            sprintf(latency_log_task->ns_entry_name, t_task->ns_ctx->entry->name);
-            latency_log_task->create_time = t_task->create_time;
-            latency_log_task->submit_time = t_task->submit_time;
-            latency_log_task->complete_time = t_task->complete_time;
-            latency_log_task->all_complete_time = all_complete_time;
+            send_msg.latency_log_tasks[rep_cnt].io_id = t_task->io_id;
+            send_msg.latency_log_tasks[rep_cnt].is_main_task = t_task->is_main_task ? 1 : 0;
+            sprintf(send_msg.latency_log_tasks[rep_cnt].ns_entry_name, t_task->ns_ctx->entry->name);
+            send_msg.latency_log_tasks[rep_cnt].create_time = t_task->create_time;
+            send_msg.latency_log_tasks[rep_cnt].submit_time = t_task->submit_time;
+            send_msg.latency_log_tasks[rep_cnt].complete_time = t_task->complete_time;
+            send_msg.latency_log_tasks[rep_cnt].all_complete_time = all_complete_time;
 
-            TAILQ_INSERT_TAIL(&send_msg.latency_log_tasks, latency_log_task, link);
+            ++rep_cnt;
         }
+        assert(rep_cnt == g_rep_num);
         // 3. 发送 msg
         if (msgsnd(g_msgid, &send_msg, sizeof(send_msg.latency_log_tasks), 0) == -1)
         {
             fprintf(stderr, "Failed to send msg to log writing process\n");
-            // exit(EXIT_FAILURE);
+            exit(EXIT_FAILURE);
         }
 
         // myprint
         // printf("Message sent: \n");
-        // struct latency_log_task_ctx *lltc_t = NULL;
-        // TAILQ_FOREACH(lltc_t, &send_msg.latency_log_tasks, link)
+        // for (int i = 0; i < 3; ++i)
         // {
-        //     printf("*** log_task->io_id = %u ***\n", lltc_t->io_id);
-        //     printf("    log_task->is_main_task = %d\n", lltc_t->is_main_task);
-        //     printf("    log_task->ns_entry_name = %s\n", lltc_t->ns_entry_name);
-        //     printf("    log_task->create_time = %llu:%llu\n", lltc_t->create_time.tv_sec, lltc_t->create_time.tv_nsec);
-        //     printf("    log_task->submit_time = %llu:%llu\n", lltc_t->submit_time.tv_sec, lltc_t->submit_time.tv_nsec);
-        //     printf("    log_task->complete_time = %llu:%llu\n", lltc_t->complete_time.tv_sec, lltc_t->complete_time.tv_nsec);
-        //     printf("    log_task->all_complete_time = %llu:%llu\n\n", lltc_t->all_complete_time.tv_sec, lltc_t->all_complete_time.tv_nsec);
+        //     printf(">>> log_task.io_id = %u >>>\n", send_msg.latency_log_tasks[i].io_id);
+        //     printf("    log_task.is_main_task = %d\n", send_msg.latency_log_tasks[i].is_main_task);
+        //     printf("    log_task.ns_entry_name = %s\n", send_msg.latency_log_tasks[i].ns_entry_name);
+        //     printf("    log_task.create_time = %llu:%llu\n", send_msg.latency_log_tasks[i].create_time.tv_sec, send_msg.latency_log_tasks[i].create_time.tv_nsec);
+        //     printf("    log_task.submit_time = %llu:%llu\n", send_msg.latency_log_tasks[i].submit_time.tv_sec, send_msg.latency_log_tasks[i].submit_time.tv_nsec);
+        //     printf("    log_task.complete_time = %llu:%llu\n", send_msg.latency_log_tasks[i].complete_time.tv_sec, send_msg.latency_log_tasks[i].complete_time.tv_nsec);
+        //     printf("    log_task.all_complete_time = %llu:%llu\n\n", send_msg.latency_log_tasks[i].all_complete_time.tv_sec, send_msg.latency_log_tasks[i].all_complete_time.tv_nsec);
         // }
 
         main_task->rep_completed_num = 0;
@@ -3534,11 +3538,31 @@ setup_sig_handlers(void)
 
 /* 封装写日志函数 */
 static void
-process_write_latency_log(struct latency_log_tasks_head* latency_log_tasks)
+process_write_latency_log(char *latency_log_tasks)
 {
+    // myprint
+    // printf("进入 process_write_latency_log\n");
+
     /* latency_log_tasks 中包含 n 个 log，是同一个 IO 的 n 个副本 */
     
     write_latency_tasks_log(latency_log_tasks, g_ns_name, g_rep_num);
+}
+
+/* 检查 msg queue 消息个数 */
+static int 
+check_msg_qnum(int msgid)
+{
+    struct msqid_ds msg_info;
+    int msg_cnt;
+
+    if (msgctl(msgid, IPC_STAT, &msg_info) == -1)
+    {
+        fprintf(stderr, "Failed to get msg queue info\n");
+        exit(EXIT_FAILURE);
+    }
+    msg_cnt = msg_info.msg_qnum;
+
+    return msg_cnt;
 }
 
 /* 处理消息队列 */
@@ -3546,70 +3570,87 @@ static void
 process_msg_recv(int msgid)
 {
     struct msg_buf recv_msg;
-    struct msqid_ds msg_info;
     int msg_cnt;
 
-    /* TODO 通过超时来退出无限循环 */
-    int zero_msg_cnt = 0;
-    while (1)
+    struct timeval start_time, current_time;
+    double eplased_time;
+    
+    // 记录起始时间和当前时间
+    gettimeofday(&start_time, NULL);
+    gettimeofday(&current_time, NULL);
+    eplased_time = current_time.tv_sec - start_time.tv_sec;
+    
+    // 先获取消息队列信息
+    msg_cnt = check_msg_qnum(msgid);
+    // myprint
+    if (msg_cnt)
+        printf("Msg queue num: %lu\n", msg_cnt);
+    
+    /* 通过超时来退出无限循环 */
+    while (eplased_time < g_time_in_sec * 2.0)
     {
-        if (msgctl(msgid, IPC_STAT, &msg_info) == -1)
-        {
-            fprintf(stderr, "Failed to get msg queue info\n");
-            exit(EXIT_FAILURE);
-        }
-        // myprint
-        printf("Msg queue num: %lu\n", msg_info.msg_qnum);
-
-        msg_cnt = msg_info.msg_qnum;
-        if (!msg_cnt)
-        {
-            if (++zero_msg_cnt > 5)
-                // 退出循环、停止处理消息队列
-                return;
-            continue;
-        }
-        else
-            zero_msg_cnt = 0;
-
         while (msg_cnt-- > 0)
         {   
             // 1. 拉取消息
             if (msgrcv(msgid, &recv_msg, sizeof(recv_msg.latency_log_tasks), 0, 0) == -1)
             {
                 fprintf(stderr, "Failed to retrieve the messages\n");
-                // exit(EXIT_FAILURE);
+                exit(EXIT_FAILURE);
             }
             
             // myprint
             // printf("Message received: \n");
-            // struct latency_log_task_ctx *lltc_t = NULL;
-            // TAILQ_FOREACH(lltc_t, &recv_msg.latency_log_tasks, link)
+            // for (int i = 0; i < 3; ++i)
             // {
-            //     printf("*** log_task->io_id = %u ***\n", lltc_t->io_id);
-            //     printf("    log_task->is_main_task = %d\n", lltc_t->is_main_task);
-            //     printf("    log_task->ns_entry_name = %s\n", lltc_t->ns_entry_name);
-            //     printf("    log_task->create_time = %llu:%llu\n", lltc_t->create_time.tv_sec, lltc_t->create_time.tv_nsec);
-            //     printf("    log_task->submit_time = %llu:%llu\n", lltc_t->submit_time.tv_sec, lltc_t->submit_time.tv_nsec);
-            //     printf("    log_task->complete_time = %llu:%llu\n", lltc_t->complete_time.tv_sec, lltc_t->complete_time.tv_nsec);
-            //     printf("    log_task->all_complete_time = %llu:%llu\n\n", lltc_t->all_complete_time.tv_sec, lltc_t->all_complete_time.tv_nsec);
+            //     printf("<<< log_task.io_id = %u <<<\n", recv_msg.latency_log_tasks[i].io_id);
+            //     printf("    log_task.is_main_task = %d\n", recv_msg.latency_log_tasks[i].is_main_task);
+            //     printf("    log_task.ns_entry_name = %s\n", recv_msg.latency_log_tasks[i].ns_entry_name);
+            //     printf("    log_task.create_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].create_time.tv_sec, recv_msg.latency_log_tasks[i].create_time.tv_nsec);
+            //     printf("    log_task.submit_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].submit_time.tv_sec, recv_msg.latency_log_tasks[i].submit_time.tv_nsec);
+            //     printf("    log_task.complete_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].complete_time.tv_sec, recv_msg.latency_log_tasks[i].complete_time.tv_nsec);
+            //     printf("    log_task.all_complete_time = %llu:%llu\n\n", recv_msg.latency_log_tasks[i].all_complete_time.tv_sec, recv_msg.latency_log_tasks[i].all_complete_time.tv_nsec);
             // }
 
-            // 2. 处理写日志
-            process_write_latency_log(&recv_msg.latency_log_tasks);
+            // 2. 写日志
+            process_write_latency_log(recv_msg.latency_log_tasks);
         }
 
-        // 间隔 n 秒取处理一次消息队列
-        sleep(1);
+update:
+        // 3. 更新经过时间
+        gettimeofday(&current_time, NULL);
+        eplased_time = current_time.tv_sec - start_time.tv_sec;
+
+        // 4. 再次更新信息
+        msg_cnt = check_msg_qnum(msgid);
+        // myprint
+        if (msg_cnt)
+            printf("Msg queue num: %lu\n", msg_cnt);
     }
+
+    // 5. 检查是否还有消息未处理
+    msg_cnt = check_msg_qnum(msgid);
+    if (msg_cnt)
+        printf("时间内循环处理消息结束后，队列中仍有 %d 条消息未处理\n", msg_cnt);
+    while (msg_cnt > 0)
+    {
+        if (msgrcv(msgid, &recv_msg, sizeof(recv_msg.latency_log_tasks), 0, 0) == -1)
+        {
+            fprintf(stderr, "Failed to retrieve the messages\n");
+            // exit(EXIT_FAILURE);
+        }
+        process_write_latency_log(recv_msg.latency_log_tasks);
+        msg_cnt = check_msg_qnum(msgid);
+    }
+
+    return;
 }
 
 /* 子进程执行函数 */
-static
+static void
 child_process_fn(int msgid)
 {
     // myprint
-    printf("Get into child process %d\n", getpid());
+    printf("Get into log writing process %d\n", getpid());
     printf("Msg queue with msgid %d\n", msgid);
 
     process_msg_recv(msgid);
@@ -3638,7 +3679,7 @@ init_ns_name_index_mapping(void)
     assert(ns_cnt == g_num_namespaces);
 
     // myprint
-    printf("namespaces mapping: \n");
+    printf("Namespaces mapping: \n");
     for (int i = 0; i < ns_cnt; ++i)
         printf("%d: %s\n", i, g_ns_name[i]);
 }
@@ -3735,9 +3776,6 @@ main(int argc, char **argv)
 		rc = -1;
 		goto cleanup;
 	}
-
-    // myprint
-    printf("g_rep_num = %d\n", g_rep_num);
 
 	rc = pthread_barrier_init(&g_worker_sync_barrier, NULL, g_num_workers);
 	if (rc != 0) {
@@ -3837,23 +3875,17 @@ cleanup:
     }
 
     /* 删除消息队列 */
-    struct msqid_ds msg_info;
-    if (msgctl(g_msgid, IPC_STAT, &msg_info) == -1)
-    {
-        perror("msgctl");
-        exit(EXIT_FAILURE);
-    }
-    // msg_qnum = 0
-    if (!msg_info.msg_qnum)
+    // 剩余消息数为 0，可以删除消息队列
+    if (!check_msg_qnum(g_msgid))
     {
         if (msgctl(g_msgid, IPC_RMID, NULL) == -1)
         {
-            perror("msgctl");
+            fprintf(stderr, "Failed to destroy msg queue\n");
             exit(EXIT_FAILURE);
         }
         printf("Msg queue destroyed\n");
     }
-    // msg_qnum > 0
+    // 依然有消息
     else
     {
         process_msg_recv(g_msgid);
