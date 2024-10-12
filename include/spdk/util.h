@@ -50,7 +50,7 @@ struct latency_log_task_ctx
     // const char *module;
     // the corresponding namespace name of the task
     char ns_entry_name[1024];
-    // the timestamp of creating rep_task (may be queued after task creation)
+    // the timestamp of creating entire task (may be queued after task creation)
     struct timespec create_time;
     // the timestamp of each Rep_task Submission
     struct timespec submit_time;
@@ -58,18 +58,20 @@ struct latency_log_task_ctx
     struct timespec complete_time;
     // the timestamp of each IO Completion
     struct timespec all_complete_time;
+    // the timestamp of the creation each Rep_task,
+    // only used for the first time to record duplication cost
+    struct timespec first_create_time;
 
     // 维护副本关系的尾队列的条目
     TAILQ_ENTRY(latency_log_task_ctx) link;
 };
-// 定义一个包含 TAILQ 头结构的结构体 latency_log_tasks_head
-static TAILQ_HEAD(latency_log_tasks_head, latency_log_task_ctx) thead = TAILQ_HEAD_INITIALIZER(thead);
 
 /* For tasks. */
 
 void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task, 
                             struct timespec create_time, struct timespec submit_time,
                             struct timespec complete_time, struct timespec all_complete_time,
+                            struct timespec first_create_time, 
                             int new_line);
 
 void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num);

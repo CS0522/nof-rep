@@ -46,6 +46,8 @@ void write_latency_log(void* ctx){
 #endif
 
 #ifdef PERF_LATENCY_LOG
+static int g_print_first_create_time_flag = 1;
+
 /**
  * @name: write_log_tasks_to_file
  * @msg: write latency log of tasks to file
@@ -56,6 +58,7 @@ void write_latency_log(void* ctx){
 void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task, 
                             struct timespec create_time, struct timespec submit_time,
                             struct timespec complete_time, struct timespec all_complete_time,
+                            struct timespec first_create_time, 
                             int new_line)
 {
     // myprint
@@ -74,14 +77,17 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task,
     if (ch == EOF)
     {
         printf("File %s is empty, write the title line\n", HOST_LOG_FILE_PATH);
-        fprintf(file, "io_id:ns_index,is_main_task,create_time,submit_time,complete_time,all_complete_time\n");
+        fprintf(file, "io_id:ns_index,is_main_task,create_time,submit_time,complete_time,all_complete_time,first_create_time\n");
     }
     // 写入记录数据
-    fprintf(file, "%u:%d,%d,%llu:%llu,%llu:%llu,%llu:%llu,%llu:%llu\n", io_id, ns_index, is_main_task,
+    fprintf(file, "%u:%d,%d,%llu:%llu,%llu:%llu,%llu:%llu,%llu:%llu", io_id, ns_index, is_main_task,
                                     create_time.tv_sec, create_time.tv_nsec, 
                                     submit_time.tv_sec, submit_time.tv_nsec, 
                                     complete_time.tv_sec, complete_time.tv_nsec, 
                                     all_complete_time.tv_sec, all_complete_time.tv_nsec);
+    if (g_print_first_create_time_flag)
+        fprintf(file, ",%llu:%llu", first_create_time.tv_sec, first_create_time.tv_nsec);
+    fprintf(file, "\n");
     // 如果该任务的 n 个副本打印结束，空一行或者做行标
     if (new_line)
         fprintf(file, "\n");
@@ -156,10 +162,14 @@ void write_latency_tasks_log(void* ctx, char **g_ns_name, uint32_t g_rep_num)
                                 latency_log_tasks[rep_cnt].is_main_task,
                                 latency_log_tasks[rep_cnt].create_time, latency_log_tasks[rep_cnt].submit_time,
                                 latency_log_tasks[rep_cnt].complete_time, latency_log_tasks[rep_cnt].all_complete_time, 
+                                latency_log_tasks[rep_cnt].first_create_time, 
                                 rep_cnt == (g_rep_num - 1) ? 1 : 0);
     }
     assert(rep_cnt == g_rep_num);
-    // 是 msg 中的数组，不能 free
+
+    g_print_first_create_time_flag = 0;
+
+    // 是 msg 中的静态数组，用 free
     // free((struct latency_log_task_ctx *)ctx);
 }
 #endif
