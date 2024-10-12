@@ -169,7 +169,7 @@ void write_latency_tasks_log(void* ctx, char **g_ns_name, uint32_t g_rep_num)
 
     g_print_first_create_time_flag = 0;
 
-    // 是 msg 中的静态数组，用 free
+    // 是 msg 中的静态数组，不用 free
     // free((struct latency_log_task_ctx *)ctx);
 }
 #endif

@@ -61,9 +61,6 @@ struct latency_log_task_ctx
     // the timestamp of the creation each Rep_task,
     // only used for the first time to record duplication cost
     struct timespec first_create_time;
-
-    // 维护副本关系的尾队列的条目
-    TAILQ_ENTRY(latency_log_task_ctx) link;
 };
 
 /* For tasks. */
