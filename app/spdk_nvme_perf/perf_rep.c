@@ -3577,14 +3577,14 @@ setup_sig_handlers(void)
 #ifdef PERF_LATENCY_LOG
 /* 封装写日志函数 */
 static void
-process_write_latency_log(char *latency_log_tasks)
+process_write_latency_log(struct latency_log_task_ctx *latency_log_tasks)
 {
     // myprint
     // printf("进入 process_write_latency_log\n");
 
     /* latency_log_tasks 中包含 n 个 log，是同一个 IO 的 n 个副本 */
     
-    write_latency_tasks_log(latency_log_tasks, g_ns_name, g_rep_num);
+    write_latency_tasks_log(latency_log_tasks, g_ns_name, g_rep_num, g_num_namespaces);
 }
 
 /* 检查 msg queue 消息个数 */
@@ -3661,6 +3661,7 @@ child_thread_fn(void *arg)
 
     struct timeval start_time, current_time;
     double eplased_time;
+    int oldstate;
     
     // 记录粗略起始时间和当前时间
     gettimeofday(&start_time, NULL);
@@ -3670,18 +3671,22 @@ child_thread_fn(void *arg)
     /* 通过超时来退出无限循环 */
     while (eplased_time < g_time_in_sec * 2.0)
     {
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &oldstate);
+
         process_msg_recv(msgid);
 
         // 3. 更新经过时间
         gettimeofday(&current_time, NULL);
         eplased_time = current_time.tv_sec - start_time.tv_sec;
+
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &oldstate);
     }
 
     return NULL;
 }
 
 /* 建立 ns_name 和 ns_index 映射 */
-static void
+static void 
 init_ns_name_index_mapping(void)
 {
     // 这里假定每个 target 只有 1 个 ns 的情况下

@@ -71,7 +71,7 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task,
                             struct timespec first_create_time, 
                             int new_line);
 
-void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num);
+void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num, uint32_t g_ns_num);
 #endif
 
 #ifdef __cplusplus

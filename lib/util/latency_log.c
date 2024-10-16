@@ -96,7 +96,7 @@ err:
     fclose(file);
 }
 
-int get_ns_index(char *name, char **g_ns_name, uint32_t g_rep_num)
+int get_ns_index(char *name, char **g_ns_name, uint32_t g_ns_num)
 {
     // myprint
     // printf("进入 get_ns_index\n");
@@ -119,13 +119,13 @@ int get_ns_index(char *name, char **g_ns_name, uint32_t g_rep_num)
     strcat(split_name, tmp);
 
     int index = 0;
-    for (; index < g_rep_num; ++index)
+    for (; index < g_ns_num; ++index)
     {
         if (!strcmp(split_name, g_ns_name[index]))
             return index;
     }
     // failed to get index
-    if (index >= g_rep_num)
+    if (index >= g_ns_num)
         exit(EXIT_FAILURE);
 }
 
@@ -134,10 +134,11 @@ int get_ns_index(char *name, char **g_ns_name, uint32_t g_rep_num)
  * @msg: mapping the ns name of log_task with ns index
  * @param {void*} ctx: struct latency_log_tasks_head*
  * @param {char**} g_ns_name: splitted ns name for mapping ns index
- * @param {uint32_t} g_rep_num: replica num = ns num
+ * @param {uint32_t} g_rep_num: replica num
+ * @param {uint32_t} g_ns_num: namespace num
  * @return {*}
  */
-void write_latency_tasks_log(void* ctx, char **g_ns_name, uint32_t g_rep_num)
+void write_latency_tasks_log(void* ctx, char **g_ns_name, uint32_t g_rep_num, uint32_t g_ns_num)
 {
     // myprint
     // printf("进入 write_latency_tasks_log\n");
@@ -160,16 +161,17 @@ void write_latency_tasks_log(void* ctx, char **g_ns_name, uint32_t g_rep_num)
     uint32_t rep_cnt = 0;
     for (; rep_cnt < g_rep_num; ++rep_cnt)
     {
-        write_log_tasks_to_file(latency_log_tasks[rep_cnt].io_id, get_ns_index(latency_log_tasks[rep_cnt].ns_entry_name, g_ns_name, g_rep_num), 
+        write_log_tasks_to_file(latency_log_tasks[rep_cnt].io_id, get_ns_index(latency_log_tasks[rep_cnt].ns_entry_name, g_ns_name, g_ns_num), 
                                 latency_log_tasks[rep_cnt].is_main_task,
                                 latency_log_tasks[rep_cnt].create_time, latency_log_tasks[rep_cnt].submit_time,
                                 latency_log_tasks[rep_cnt].complete_time, latency_log_tasks[rep_cnt].all_complete_time, 
                                 latency_log_tasks[rep_cnt].first_create_time, 
-                                rep_cnt == (g_rep_num - 1) ? 1 : 0);
+                                (g_rep_num != 1 && (rep_cnt == (g_rep_num - 1))) ? 1 : 0);
     }
     assert(rep_cnt == g_rep_num);
 
-    g_print_first_create_time_flag = 0;
+    if (g_rep_num != 1)
+        g_print_first_create_time_flag = 0;
 
     // 是 msg 中的静态数组，不用 free
     // free((struct latency_log_task_ctx *)ctx);
