@@ -10,6 +10,7 @@
 !/examples
 /examples/*
 !/examples/nvmf
+!/setup
 *.o
 *.d
 *.map
