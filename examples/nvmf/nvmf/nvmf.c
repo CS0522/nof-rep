@@ -568,6 +568,16 @@ nvmf_tgt_create_poll_groups_done(void *ctx)
 
 	TAILQ_INSERT_TAIL(&g_poll_groups, pg, link);
 
+	#ifdef APP_THREAD_EXCLUSIVE_REACTOR
+	assert(g_num_poll_groups < spdk_env_get_core_count() - 1);
+
+	if (++g_num_poll_groups == spdk_env_get_core_count() - 1) {
+		fprintf(stdout, "create targets's poll groups done\n");
+
+		g_target_state = NVMF_INIT_START_SUBSYSTEMS;
+		nvmf_target_advance_state();
+	}
+	#elif
 	assert(g_num_poll_groups < spdk_env_get_core_count());
 
 	if (++g_num_poll_groups == spdk_env_get_core_count()) {
@@ -576,6 +586,7 @@ nvmf_tgt_create_poll_groups_done(void *ctx)
 		g_target_state = NVMF_INIT_START_SUBSYSTEMS;
 		nvmf_target_advance_state();
 	}
+	#endif
 }
 
 static void
@@ -616,7 +627,17 @@ nvmf_poll_groups_create(void)
 
 	assert(g_init_thread != NULL);
 
+	#ifdef APP_THREAD_EXCLUSIVE_REACTOR
+	int core_num = 0;
+	#endif
+
 	SPDK_ENV_FOREACH_CORE(i) {
+		#ifdef APP_THREAD_EXCLUSIVE_REACTOR
+		core_num++;
+		if(core_num == 1){
+			continue;
+		}
+		#endif
 		spdk_cpuset_zero(&tmp_cpumask);
 		spdk_cpuset_set_cpu(&tmp_cpumask, i, true);
 		snprintf(thread_name, sizeof(thread_name), "nvmf_tgt_poll_group_%03u", i);
@@ -626,6 +647,13 @@ nvmf_poll_groups_create(void)
 
 		spdk_thread_send_msg(thread, nvmf_tgt_create_poll_group, NULL);
 	}
+	#ifdef APP_THREAD_EXCLUSIVE_REACTOR
+	if(core_num < 2){
+		fprintf(stderr, "In app_thread exclusive reactor mode, the number of core should more than one\n");
+		assert(false);
+	}
+	printf("success create poll group\n");
+	#endif
 }
 
 static void

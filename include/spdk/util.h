@@ -14,6 +14,65 @@
 #define __STDC_WANT_LIB_EXT1__ 1
 
 #include "spdk/stdinc.h"
+#include "spdk/queue.h"
+
+// #define LANTENCY_LOG
+#define APP_THREAD_EXCLUSIVE_REACTOR
+
+#define PERF_LATENCY_LOG
+
+#ifdef LANTENCY_LOG
+#define TARGET_LOG_FILE_PATH "../target_latency_log.csv"
+
+struct latency_log_ctx{
+	uint64_t io_id;
+	const char* module;
+	struct timespec start_time;
+	struct timespec end_time;
+};
+
+void write_log_to_file(uint64_t wr_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish);
+
+void write_latency_log(void* ctx);
+#endif
+
+#ifdef PERF_LATENCY_LOG
+#define HOST_LOG_FILE_PATH "../host_latency_log.csv"
+
+/* latency log context for perf task */
+struct latency_log_task_ctx
+{
+    uint32_t io_id;
+    // 1: main_task, 0: rep_task
+    int is_main_task;
+    // module is related with task type
+    // main_task, or rep_task
+    // const char *module;
+    // the corresponding namespace name of the task
+    char ns_entry_name[1024];
+    // the timestamp of creating entire task (may be queued after task creation)
+    struct timespec create_time;
+    // the timestamp of each Rep_task Submission
+    struct timespec submit_time;
+    // the timestamp of each Rep_task Completion
+    struct timespec complete_time;
+    // the timestamp of each IO Completion
+    struct timespec all_complete_time;
+    // the timestamp of the creation each Rep_task,
+    // only used for the first time to record duplication cost
+    struct timespec first_create_time;
+};
+
+/* For tasks. */
+
+void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task, 
+                            struct timespec create_time, struct timespec submit_time,
+                            struct timespec complete_time, struct timespec all_complete_time,
+                            struct timespec first_create_time, 
+                            int new_line);
+
+void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num, uint32_t g_ns_num);
+#endif
 
 #ifdef __cplusplus
 extern "C" {

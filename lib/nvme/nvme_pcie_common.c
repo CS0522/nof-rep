@@ -17,6 +17,10 @@
 
 #include "spdk_internal/trace_defs.h"
 
+#ifdef LANTENCY_LOG
+#include"spdk/latency_nvme_struct.h"
+#endif
+
 __thread struct nvme_pcie_ctrlr *g_thread_mmio_ctrlr = NULL;
 
 static struct spdk_nvme_pcie_stat g_dummy_stat = {};
@@ -674,6 +678,14 @@ nvme_pcie_qpair_complete_tracker(struct spdk_nvme_qpair *qpair, struct nvme_trac
 	bool				print_error;
 
 	req = tr->req;
+	#ifdef LANTENCY_LOG
+	if(req->parent == NULL && req->cb_arg != NULL){
+		struct nvme_bdev_io* bio = (struct nvme_bdev_io*)req->cb_arg;
+		if(bio->start_time_ssd.tv_sec == req->start_time.tv_sec && bio->start_time_ssd.tv_nsec == req->start_time.tv_nsec && req->start_time.tv_sec != 0){
+			clock_gettime(CLOCK_REALTIME, &bio->end_time_ssd);
+		}
+	}
+	#endif
 
 	spdk_trace_record(TRACE_NVME_PCIE_COMPLETE, qpair->id, 0, (uintptr_t)req, req->cb_arg,
 			  (uint32_t)req->cmd.cid, (uint32_t)cpl->status_raw, pqpair->qpair.queue_depth);

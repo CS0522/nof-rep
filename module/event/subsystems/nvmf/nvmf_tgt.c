@@ -157,6 +157,16 @@ nvmf_tgt_create_poll_group_done(void *ctx)
 
 	TAILQ_INSERT_TAIL(&g_poll_groups, pg, link);
 
+	#ifdef APP_THREAD_EXCLUSIVE_REACTOR
+	assert(g_num_poll_groups < nvmf_get_cpuset_count() - 1);
+
+	if (++g_num_poll_groups == nvmf_get_cpuset_count() - 1) {
+		if (g_tgt_state != NVMF_TGT_ERROR) {
+			g_tgt_state = NVMF_TGT_INIT_START_SUBSYSTEMS;
+		}
+		nvmf_tgt_advance_state();
+	}
+	#elif
 	assert(g_num_poll_groups < nvmf_get_cpuset_count());
 
 	if (++g_num_poll_groups == nvmf_get_cpuset_count()) {
@@ -165,6 +175,7 @@ nvmf_tgt_create_poll_group_done(void *ctx)
 		}
 		nvmf_tgt_advance_state();
 	}
+	#endif
 }
 
 static void
@@ -196,10 +207,20 @@ nvmf_tgt_create_poll_groups(void)
 	g_tgt_init_thread = spdk_get_thread();
 	assert(g_tgt_init_thread != NULL);
 
+	#ifdef APP_THREAD_EXCLUSIVE_REACTOR
+	int core_num = 0;
+	#endif
+
 	SPDK_ENV_FOREACH_CORE(cpu) {
 		if (g_poll_groups_mask && !spdk_cpuset_get_cpu(g_poll_groups_mask, cpu)) {
 			continue;
 		}
+		#ifdef APP_THREAD_EXCLUSIVE_REACTOR
+		core_num++;
+		if(core_num == 1){
+			continue;
+		}
+		#endif
 		snprintf(thread_name, sizeof(thread_name), "nvmf_tgt_poll_group_%03u", count++);
 
 		thread = spdk_thread_create(thread_name, g_poll_groups_mask);
@@ -207,6 +228,12 @@ nvmf_tgt_create_poll_groups(void)
 
 		spdk_thread_send_msg(thread, nvmf_tgt_create_poll_group, NULL);
 	}
+	#ifdef APP_THREAD_EXCLUSIVE_REACTOR
+	if(core_num < 2){
+		fprintf(stderr, "In app_thread exclusive reactor mode, the number of core should more than one\n");
+		assert(false);
+	}
+	#endif
 }
 
 static void
