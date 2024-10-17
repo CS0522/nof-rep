@@ -1,18 +1,18 @@
-#!/bin/bash
-# rdma startup
-# run with root
-# DOING:
-# 1. Install tools
-# 2. Setup rdma & nvme
+#!/usr/bin/env bash
+# Setup RDMA Soft RoCE
+# Run with root
+# Steps: 
+# 1. Install tools;
+# 2. Setup rdma & nvme.
 
 # install 
-apt-get install vim net-tools nvme-cli fio
+# apt-get install vim open-vm-tools open-vm-tools-desktop net-tools nvme-cli fio
 
 # rdma user space tools
-apt-get install libibverbs1 ibverbs-utils librdmacm1 libibumad3 ibverbs-providers rdma-core
+# apt-get install libibverbs1 ibverbs-utils librdmacm1 libibumad3 ibverbs-providers rdma-core
 
 # rdma test tool
-apt-get install perftest
+# apt-get install perftest
 
 # get local IP address
 local_ip=`ifconfig -a | grep inet | grep -v 127.0.0.1 | grep -v inet6 | awk '{print $2}' | tr -d "addr:"`
