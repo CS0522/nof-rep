@@ -19,7 +19,7 @@
 // #define LANTENCY_LOG
 #define APP_THREAD_EXCLUSIVE_REACTOR
 
-#define PERF_LATENCY_LOG
+// #define PERF_LATENCY_LOG
 
 #ifdef LANTENCY_LOG
 #define TARGET_LOG_FILE_PATH "../target_latency_log.csv"

@@ -72,7 +72,7 @@ if [ ${node_num} -ne ${ssh_cmd_num} ]; then
     echo "ssh_cmd_num is not equal to node_num"
     exit
 fi
-### end check ###
+### end check ####
 
 # store ssh_cmds and split them into hostnames
 # default the first one is Host, remains are Target
@@ -169,7 +169,7 @@ function setup_spdk_with_latency_test() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
             cd ${setup_dir}
-            
+            sh ./setup_spdk_with_latency_test.sh
             exit
 ENDSSH
 }
@@ -213,7 +213,7 @@ function setup_all_nodes_fn()
         # 3. Setup RDMA Soft-RoCE / RDMA RoCE;
         setup_rdma ${hostname}
         # 4. Setup SPDK vs.24.05.x with latency_test;
-        # setup_spdk_with_latency_test ${hostname}
+        setup_spdk_with_latency_test ${hostname}
         # 5. If is Target, configure this target device;
         # configure_target ${hostname}
         # 6. If is Host, configure host device and do a simple perf test.

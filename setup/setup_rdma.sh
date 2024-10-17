@@ -43,7 +43,7 @@ function modprobe_nvme() {
 
 # setup RoCE
 # function setup_roce() {
-
+    # # TODO
 # }
 
 # setup Soft RoCE
@@ -55,12 +55,13 @@ function setup_soft_roce() {
 # check RDMA status
 function check_rdma_status() {
     rdma link
-    local state=`rdma link | awk 'print{$ 4}'`
-    local physical_state=`rdma link | awk 'print{$ 6}'`
-    local rdma_net_dev=`rdma link | awk 'print{$ 8}'`
+    local state=`rdma link | awk '{print $4}'`
+    local physical_state=`rdma link | awk '{print $6}'`
+    local rdma_net_dev=`rdma link | awk '{print $8}'`
     # valid
     if [ "ACTIVE" = ${state} ] && [ "LINK_UP" = ${physical_state} ] && [ ${net_dev} = ${rdma_net_dev} ]; then
         echo "Setup RDMA Soft RoCE succeeded. "
+    # invalid
     else
         echo "Setup RDMA Soft RoCE failed. "
     fi
@@ -77,6 +78,7 @@ if [ $# -ne 1 ]; then
     usage
     exit
 fi
+### end check ####
 
 # setup function
 is_mlnx=$1

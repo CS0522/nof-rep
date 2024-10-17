@@ -21,4 +21,3 @@ Makefile
 !/lib/util/Makefile
 *.md
 !.gitignore
-!/lib/util/Makefile
