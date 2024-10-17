@@ -29,7 +29,7 @@
 #include "spdk_internal/trace_defs.h"
 #include "spdk_internal/assert.h"
 
-#ifdef LANTENCY_LOG
+#ifdef TARGET_LATENCY_LOG
 #include"spdk/latency_rdma_struct.h"
 #endif
 
@@ -3577,7 +3577,7 @@ bdev_io_submit(struct spdk_bdev_io *bdev_io)
 	bdev_ch_add_to_io_submitted(bdev_io);
 
 	bdev_io->internal.submit_tsc = spdk_get_ticks();
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	clock_gettime(CLOCK_REALTIME, &bdev_io->start_time);
 	#endif
 	spdk_trace_record_tsc(bdev_io->internal.submit_tsc, TRACE_BDEV_IO_START,
@@ -7258,7 +7258,7 @@ bdev_io_complete(void *ctx)
 
 	tsc = spdk_get_ticks();
 	tsc_diff = tsc - bdev_io->internal.submit_tsc;
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
 	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
 	struct spdk_nvmf_rdma_request* rdma_req = SPDK_CONTAINEROF(req, struct spdk_nvmf_rdma_request, req); 

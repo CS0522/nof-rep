@@ -8,7 +8,7 @@
 #include "spdk/nvme_ocssd.h"
 #include "spdk/string.h"
 
-#ifdef LANTENCY_LOG
+#ifdef TARGET_LATENCY_LOG
 #include"spdk/latency_nvme_struct.h"
 #endif
 
@@ -1026,7 +1026,7 @@ _nvme_qpair_submit_request(struct spdk_nvme_qpair *qpair, struct nvme_request *r
 		goto error;
 	}
 
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	if(req->parent == NULL){
 		struct nvme_bdev_io* bio = (struct nvme_bdev_io*)req->cb_arg;
 		if(bio->start_time_ssd.tv_nsec == 123){

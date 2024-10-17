@@ -17,7 +17,7 @@
 
 #include "spdk_internal/trace_defs.h"
 
-#ifdef LANTENCY_LOG
+#ifdef TARGET_LATENCY_LOG
 #include"spdk/latency_nvme_struct.h"
 #endif
 
@@ -678,7 +678,7 @@ nvme_pcie_qpair_complete_tracker(struct spdk_nvme_qpair *qpair, struct nvme_trac
 	bool				print_error;
 
 	req = tr->req;
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	if(req->parent == NULL && req->cb_arg != NULL){
 		struct nvme_bdev_io* bio = (struct nvme_bdev_io*)req->cb_arg;
 		if(bio->start_time_ssd.tv_sec == req->start_time.tv_sec && bio->start_time_ssd.tv_nsec == req->start_time.tv_nsec && req->start_time.tv_sec != 0){

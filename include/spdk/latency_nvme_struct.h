@@ -1,8 +1,8 @@
 #include "spdk/util.h"
-#ifdef LANTENCY_LOG
+#ifdef TARGET_LATENCY_LOG
 #include"spdk/nvme.h"
 struct nvme_bdev_io {
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	struct timespec start_time_ssd;
 	struct timespec end_time_ssd;
 	struct timespec start_time;

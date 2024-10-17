@@ -2,6 +2,7 @@
 !/app
 /app/*
 !/app/spdk_nvme_perf
+!/app/spdk_nvme_perf_rep
 !/include
 /include/*
 !/include/spdk
@@ -17,7 +18,11 @@
 *.log
 *.mk
 Makefile
+!/app/Makefile
 !/app/spdk_nvme_perf/Makefile
+!/app/spdk_nvme_perf_rep/Makefile
 !/lib/util/Makefile
 *.md
 !.gitignore
+!configure
+!CONFIG

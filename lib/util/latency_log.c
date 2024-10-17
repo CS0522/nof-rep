@@ -1,5 +1,5 @@
 #include "spdk/util.h"
-#ifdef LANTENCY_LOG
+#ifdef TARGET_LATENCY_LOG
 #define MAX_CHAR_CACHE 100000
 #define LOG_MAX_SIZE 100
 #define UPDATE_PERIOD (MAX_CHAR_CACHE / LOG_MAX_SIZE)

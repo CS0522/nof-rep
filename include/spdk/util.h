@@ -16,13 +16,13 @@
 #include "spdk/stdinc.h"
 #include "spdk/queue.h"
 
-// #define LANTENCY_LOG
+// #define TARGET_LATENCY_LOG
 #define APP_THREAD_EXCLUSIVE_REACTOR
 
 // #define PERF_LATENCY_LOG
 
-#ifdef LANTENCY_LOG
-#define TARGET_LOG_FILE_PATH "../target_latency_log.csv"
+#ifdef TARGET_LATENCY_LOG
+#define TARGET_LOG_FILE_PATH "../output/target_latency_log.csv"
 
 struct latency_log_ctx{
 	uint64_t io_id;
@@ -37,7 +37,7 @@ void write_latency_log(void* ctx);
 #endif
 
 #ifdef PERF_LATENCY_LOG
-#define HOST_LOG_FILE_PATH "../host_latency_log.csv"
+#define HOST_LOG_FILE_PATH "../output/host_latency_log.csv"
 
 /* latency log context for perf task */
 struct latency_log_task_ctx

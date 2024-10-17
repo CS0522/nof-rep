@@ -32,7 +32,7 @@
 #include "spdk_internal/usdt.h"
 #include "spdk_internal/trace_defs.h"
 
-#ifdef LANTENCY_LOG
+#ifdef TARGET_LATENCY_LOG
 #include"spdk/latency_rdma_struct.h"
 #endif
 
@@ -46,7 +46,7 @@
 static int bdev_nvme_config_json(struct spdk_json_write_ctx *w);
 
 struct nvme_bdev_io {
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	struct timespec start_time_ssd;
 	struct timespec end_time_ssd;
 	struct timespec start_time;
@@ -1264,7 +1264,7 @@ bdev_nvme_update_io_path_stat(struct nvme_bdev_io *bio)
 	}
 
 	tsc_diff = spdk_get_ticks() - bio->submit_tsc;
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
 	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
 	struct spdk_nvmf_rdma_request* rdma_req = SPDK_CONTAINEROF(req, struct spdk_nvmf_rdma_request, req); 
@@ -3167,7 +3167,7 @@ bdev_nvme_submit_request(struct spdk_io_channel *ch, struct spdk_bdev_io *bdev_i
 	struct nvme_bdev_channel *nbdev_ch = spdk_io_channel_get_ctx(ch);
 	struct nvme_bdev_io *nbdev_io = (struct nvme_bdev_io *)bdev_io->driver_ctx;
 
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	clock_gettime(CLOCK_REALTIME, &nbdev_io->start_time);
 	nbdev_io->start_time_ssd.tv_nsec = 123;
 	#endif
@@ -7379,7 +7379,7 @@ bdev_nvme_readv_done(void *ref, const struct spdk_nvme_cpl *cpl)
 	struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(bio);
 	int ret;
 
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
 	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
 	struct spdk_nvmf_rdma_request* rdma_req = SPDK_CONTAINEROF(req, struct spdk_nvmf_rdma_request, req); 

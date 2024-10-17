@@ -1,5 +1,5 @@
 #include "spdk/util.h"
-#ifdef LANTENCY_LOG
+#ifdef TARGET_LATENCY_LOG
 #include "spdk/nvmf_transport.h"
 #include "spdk_internal/rdma.h"
 
@@ -23,7 +23,7 @@ struct spdk_nvmf_rdma_wr {
  */
 struct spdk_nvmf_rdma_recv {
 	struct ibv_recv_wr			wr;
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	uint32_t io_id;
 	#endif
 	struct ibv_sge				sgl[NVMF_DEFAULT_RX_SGE];
@@ -46,7 +46,7 @@ struct spdk_nvmf_rdma_request_data {
 
 struct spdk_nvmf_rdma_request {
 	struct spdk_nvmf_request		req;
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	uint32_t io_id;
 	struct timespec start_time;
 	#endif
