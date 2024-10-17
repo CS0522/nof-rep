@@ -133,7 +133,7 @@ function usage() {
 	echo " --with-golang             Build with components written in Go"
 	echo " --without-golang          No path required."
     echo " --with-perf-latency-log   Enable perf latency log."
-    echo " --with-lantency-log       Enable target side latency log."
+    echo " --with-target-latency-log Enable target side latency log."
 	echo ""
 	echo "Environment variables:"
 	echo ""
@@ -484,7 +484,7 @@ for i in "$@"; do
             CONFIG[PERF_LATENCY_LOG]=y
             ;;
         # 添加 TARGET_LATENCY_LOG
-        --with-lantency-log)
+        --with-target-latency-log)
             CONFIG[TARGET_LATENCY_LOG]=y
             ;;
 		--with-fc=*)

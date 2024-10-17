@@ -3722,6 +3722,14 @@ main(int argc, char **argv)
 {
     printf("========== perf_rep ==========\n");
 
+#ifdef PERF_LATENCY_LOG
+    printf("PERF_LATENCY_LOG is on. \n");
+#endif
+
+#ifdef TARGET_LATENCY_LOG
+    printf("TARGET_LATENCY_LOG is on. \n");
+#endif
+
 	int rc;
 	struct worker_thread *worker, *main_worker;
 	struct ns_worker_ctx *ns_ctx;
