@@ -148,6 +148,7 @@ function clone_latency_test() {
             cd ${spdk_dir}
             git remote add origin ${latency_test_repo} && git fetch
             git checkout -f -t origin/${latency_test_branch}
+            chmod 777 ./setup/*
             exit
 ENDSSH
 }
@@ -158,8 +159,8 @@ function setup_rdma() {
     # is not mlnx: Soft RoCE
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
-            cd ${setup_dir}
-            sh ./setup_rdma.sh ${is_mlnx}
+            cd ${spdk_dir}
+            ${setup_dir}/setup_rdma.sh ${is_mlnx}
             exit
 ENDSSH
 }
@@ -168,28 +169,30 @@ function setup_spdk_with_latency_test() {
     local hostname=$1
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
-            cd ${setup_dir}
-            sh ./setup_spdk_with_latency_test.sh
+            cd ${spdk_dir}
+            ${setup_dir}/setup_spdk_with_latency_test.sh
             exit
 ENDSSH
 }
 
+# TODO 需要返回该 Target IP
 function configure_target() {
     local hostname=$1
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
-            cd ${setup_dir}
-            
+            cd ${spdk_dir}
+            ${setup_dir}/configure_target.sh
             exit
 ENDSSH
 }
 
+# TODO 需要返回该 Host IP
 function configure_host() {
     local hostname=$1
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
-            cd ${setup_dir}
-            
+            cd ${spdk_dir}
+            ${setup_dir}/configure_host.sh
             exit
 ENDSSH
 }

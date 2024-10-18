@@ -6,6 +6,8 @@
 # 1. Install tools;
 # 2. Setup RDMA.
 
+# pwd: spdk_dir
+
 function install_tools() {
     # system tools
     apt-get install -y vim net-tools nvme-cli fio
@@ -19,13 +21,13 @@ function install_tools() {
 function get_local_ip() {
     # local_ip=`ifconfig -a | grep inet | grep -v 127.0.0.1 | grep -v inet6 | awk '{print $2}' | tr -d "addr:"`
     local_ip=`hostname -I | awk '{print $1}'`
-    echo local_ip="${local_ip}"
+    echo "local_ip=${local_ip}"
 }
 
 # get device name
 function get_net_dev() {
     net_dev=`ifconfig | grep -w BROADCAST | awk '{print $1}' | sed 's/://g'`
-    echo net_dev="${net_dev}"
+    echo "net_dev=${net_dev}"
 }
 
 # modprobe RXE NIC
@@ -59,7 +61,7 @@ function check_rdma_status() {
     local physical_state=`rdma link | awk '{print $6}'`
     local rdma_net_dev=`rdma link | awk '{print $8}'`
     # valid
-    if [ "ACTIVE" = ${state} ] && [ "LINK_UP" = ${physical_state} ] && [ ${net_dev} = ${rdma_net_dev} ]; then
+    if [[ "ACTIVE" == ${state} ]] && [[ "LINK_UP" == ${physical_state} ]] && [[ ${net_dev} == ${rdma_net_dev} ]]; then
         echo "Setup RDMA Soft RoCE succeeded. "
     # invalid
     else
