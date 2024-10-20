@@ -9,6 +9,8 @@
 
 # pwd: spdk_dir
 
+set -eu
+
 function install_dependencies() {
     # -r: with RDMA dependencies
     ./scripts/pkgdep.sh -r
@@ -38,13 +40,11 @@ function unit_test() {
 }
 
 function usage() {
-    echo "Args:                 <sh_name=setup_rdma.sh> <is_mlnx>"
+    echo "Params:                 <sh_name=setup_rdma.sh>"
     echo "sh_name:              shell script name"
 }
 
 function setup_spdk_with_latency_test_fn() {
-    # change dir to the root dir of spdk
-    cd ../
     install_dependencies
     build_spdk_with_latency_test
     unit_test

@@ -10,6 +10,23 @@
 
 # pwd: spdk_dir
 
+set -eu
+
+function usage() {
+    echo "Params:                 <sh_name=configure_target.sh> <is_100g>"
+    echo "sh_name:              shell script name"
+    echo "is_100g:              100 Gbps or normal?"
+}
+
+### check args ###
+if [ $# -ne 1 ]; then
+    usage
+    exit
+fi
+### end check ####
+
+is_100g=$1
+
 function rebuild_target_spdk_with_latency_test() {
     # configure with rdma and target latency log
     ./configure --with-rdma --with-target-latency-log
@@ -33,7 +50,8 @@ function get_bdf() {
 }
 
 function run_nvmf_tgt() {
-    ./build/bin/nvmf_tgt &
+    # it needs more than 2 cores
+    ./build/bin/nvmf_tgt -m 0x3 &
 }
 
 function create_transport() {
@@ -97,8 +115,11 @@ function configure_target_env() {
 
 # get local IP address
 function get_local_ip() {
-    # local_ip=`ifconfig -a | grep inet | grep -v 127.0.0.1 | grep -v inet6 | awk '{print $2}' | tr -d "addr:"`
-    local_ip=`hostname -I | awk '{print $1}'`
+    local mtu="mtu 1500"
+    if [ ${is_100g} -eq 1 ]; then
+        mtu="mtu 9000"
+    fi
+    local_ip=`ifconfig | grep -A 1 "${mtu}" | grep 'inet' | awk '{print $2}'`
     echo "local_ip=${local_ip}"
 }
 

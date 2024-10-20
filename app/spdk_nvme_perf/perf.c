@@ -3453,6 +3453,8 @@ child_thread_fn(void *arg)
     printf("Get into log writing thread. \n");
     printf("Msg queue with msgid %d. \n", msgid);
 
+    spdk_unaffinitize_thread();
+
     struct timeval start_time, current_time;
     double eplased_time;
     int oldstate;

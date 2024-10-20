@@ -10,6 +10,8 @@
 
 # pwd: spdk_dir
 
+set -eu
+
 function rebuild_host_spdk_with_latency_test() {
     # configure with rdma and perf latency log
     ./configure --with-rdma --with-perf-latency-log
@@ -30,3 +32,6 @@ function configure_host_fn() {
     rebuild_host_spdk_with_latency_test
     configure_host_env
 }
+
+### run
+configure_host_fn
