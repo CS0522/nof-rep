@@ -25,7 +25,7 @@
 #define TARGET_LOG_FILE_PATH "../output/target_latency_log.csv"
 
 struct latency_log_ctx{
-	uint64_t io_id;
+	uint32_t io_id;
 	const char* module;
 	struct timespec start_time;
 	struct timespec end_time;

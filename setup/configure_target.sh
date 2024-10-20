@@ -138,6 +138,7 @@ function check_listening_status() {
         echo "Add listener succeeded. "
         echo "Configure Target succeeded. "
     fi
+    exit
 }
 
 function remove_listener() {
@@ -151,6 +152,7 @@ function configure_target_fn() {
     get_local_ip
     add_listener
     check_listening_status
+    exit
 }
 
 ### run

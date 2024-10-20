@@ -138,7 +138,7 @@ function install_git() {
             sudo su
             mkdir -p ${workspace_dir}/output && cd ${workspace_dir}
             apt update
-            apt install -y git
+            apt install -y git pkg-config
             git config --global init.defaultBranch master 
             git config --global user.name "CS0522"
             git config --global user.email "chenshi020522@outlook.com"
@@ -148,13 +148,28 @@ ENDSSH
 
 function clone_spdk() {
     local hostname=$1
+#     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
+#             sudo su
+#             cd ${workspace_dir}
+#             git clone --branch v${spdk_version} ${spdk_repo} ./spdk-${spdk_version} && cd ./spdk-${spdk_version}
+#             git submodule update --init
+#             rm -rf ./.git && git init
+#             exit
+# ENDSSH
+    # use my file
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
-            sudo su
-            cd ${workspace_dir}
-            git clone --branch v${spdk_version} ${spdk_repo} ./spdk-${spdk_version} && cd ./spdk-${spdk_version}
-            git submodule update --init
-            rm -rf .git && git init
-            exit
+        sudo su
+        cd ${workspace_dir}
+        wget https://codeload.github.com/spdk/spdk/zip/refs/heads/v${spdk_version} -O ./spdk-${spdk_version}.zip
+        unzip -d ./ spdk-${spdk_version}.zip
+        cd ./spdk-${spdk_version}
+        git init
+        git remote add origin ${spdk_repo}
+        git fetch
+        git checkout -f -t origin/v${spdk_version}
+        git submodule update --init
+        rm -rf ./.git && git init
+        exit
 ENDSSH
 }
 
