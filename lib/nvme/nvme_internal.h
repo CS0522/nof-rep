@@ -271,14 +271,13 @@ struct nvme_error_cmd {
 };
   
 struct nvme_request {
-    // 添加一个保存 task index 的字段
-    uint32_t task_index;
-
 	// cmd.cid 与 rdma_req 绑定
 	struct spdk_nvme_cmd		cmd;
 	#ifdef LANTENCY_LOG
 	struct timespec start_time;
 	#endif
+    	// 添加一个保存 task index 的字段
+    	uint32_t task_index;
 
 	uint8_t				retries;
 
