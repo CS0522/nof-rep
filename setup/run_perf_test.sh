@@ -19,6 +19,7 @@ function usage() {
     echo "Author: CS0522"
     echo "Run perf or perf_rep test on Host node."
     echo "!!! Run with root !!!"
+    echo "!!! Run on local machine !!!"
     echo ""
     echo "You should input as:  <sh_name=run_perf_test.sh> <cloudlab_username> <file_path> "
     echo "sh_name:              bash script name"

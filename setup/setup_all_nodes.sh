@@ -38,9 +38,10 @@ function usage() {
     echo "Setup all nodes," 
     echo "including Host node and Target nodes."
     echo "!!! Run with root !!!"
+    echo "!!! Run on local machine !!!"
     echo "All scripts are supposed to be executed under spdk root dir."
     echo ""
-    echo "You should input as:  <sh_name=setup_all_nodes.sh> <cloudlab_username> <is_mlnx> <node_num> [hostnames...]"
+    echo "You should input as:  <sh_name=setup_all_nodes.sh> <cloudlab_username> <is_mlnx> <is_100g> <node_num> [hostnames...]"
     echo "sh_name:              shell script name"
     echo "is_mlnx:              NIC supports RDMA or not?"
     echo "is_100g:              100 Gbps or normal?"
@@ -117,11 +118,11 @@ function output_hostnames() {
 }
 
 ### args of setup
-# dir of remote machine is Absolute Path
 ssh_arg="-o StrictHostKeyChecking=no"
-workspace_dir="/opt/Workspace"
 spdk_repo="https://github.com/spdk/spdk.git"
 spdk_version="24.05.x"
+# dir of remote machine is Absolute Path
+workspace_dir="/opt/Workspace"
 spdk_dir="${workspace_dir}/spdk-${spdk_version}"
 setup_dir="${spdk_dir}/setup"
 latency_test_repo="https://github.com/CS0522/nof-rep.git"
@@ -164,19 +165,19 @@ function clone_latency_test() {
             cd ${spdk_dir}
             git remote add origin ${latency_test_repo} && git fetch
             git checkout -f -t origin/${latency_test_branch}
-            chmod 777 ./setup/*
+            chmod 777 ${setup_dir}/*
             exit
 ENDSSH
 }
 
 function setup_rdma() {
     local hostname=$1
-    # is mlnx: RoCE
-    # is not mlnx: Soft RoCE
+    # is mlnx: check RDMA is up?
+    # is 100g: 100 Gbps or normal?
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
             cd ${spdk_dir}
-            ${setup_dir}/setup_rdma.sh ${is_mlnx}
+            ${setup_dir}/setup_rdma.sh ${is_mlnx} ${is_100g}
             exit
 ENDSSH
 }
@@ -215,7 +216,7 @@ ENDSSH
 # params: 
 #   hostname: the hostname
 #   node_index: the index of this node, mapping to hostnames
-function get_local_ip() {
+function get_node_local_ip() {
     local hostname=$1
     local node_index=$2
     local mtu="mtu 1500"
@@ -238,6 +239,10 @@ ENDSSH
 ### setup function
 function setup_all_nodes_fn() 
 {
+    # make output dir on local machine
+    mkdir -p ./setup/${setup_output_dir}
+    mkdir -p ./setup/${run_output_dir}
+
     local curr_node=0
     while (( ${curr_node}<${node_num} )); do
         local hostname=${hostnames[${curr_node}]}
@@ -250,7 +255,7 @@ function setup_all_nodes_fn()
         clone_spdk ${hostname}
         # 2. Clone latency_test code to get setup scripts;
         clone_latency_test ${hostname}
-        # 3. Setup RDMA Soft-RoCE / RDMA RoCE;
+        # 3. Setup RDMA;
         setup_rdma ${hostname}
         # 4. Setup SPDK vs.24.05.x with latency_test;
         setup_spdk_with_latency_test ${hostname}
@@ -262,14 +267,11 @@ function setup_all_nodes_fn()
             configure_target ${hostname}
         fi
         # 7. get the current node's local ip
-        get_local_ip ${hostname} ${curr_node}
+        get_node_local_ip ${hostname} ${curr_node}
 
         curr_node=`expr ${curr_node} + 1`
     done
 
-    # make output dir (local machine)
-    mkdir ${setup_output_dir}
-    mkdir ${run_output_dir}
     # write local_ip to nodes_local_ip.txt
     curr_node=0
     while (( ${curr_node}<${node_num} )); do

@@ -19,6 +19,7 @@ function usage() {
     echo "Author: CS0522"
     echo "Get outputs from all nodes."
     echo "!!! Run with root !!!"
+    echo "!!! Run on local machine !!!"
     echo "All scripts are supposed to be executed under spdk root dir."
     echo ""
     echo "You should input as:  <sh_name=get_run_output.sh> <cloudlab_username> <node_num> [hostnames...]"
@@ -47,11 +48,11 @@ node_num=$2
 declare -A hostnames
 
 ### check params ###
-if [[ "${run_app}" != "perf" ]] && [[ "${run_app}" != "perf_rep" ]]; then
-    echo "run_app param is invalid."
-    usage
-    exit
-fi
+# if [[ "${run_app}" != "perf" ]] && [[ "${run_app}" != "perf_rep" ]]; then
+#     echo "run_app param is invalid."
+#     usage
+#     exit
+# fi
 # check if hostname_num == node_num
 hostname_num=0
 # arg_pos moves left 2
@@ -109,8 +110,8 @@ function get_run_output_fn() {
     # 2. get host perf output log
     curr_node=0
     local host=${hostnames[${curr_node}]}
-    get_outputs ${hostname} ${perf_output_log} ${perf_output_log}
-    get_outputs ${hostname} ${perf_rep_output_log} ${perf_rep_output_log}
+    get_outputs ${host} ${perf_output_log} ${perf_output_log}
+    get_outputs ${host} ${perf_rep_output_log} ${perf_rep_output_log}
 }
 
 ### run
