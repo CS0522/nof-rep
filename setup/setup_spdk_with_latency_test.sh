@@ -40,14 +40,26 @@ function unit_test() {
 }
 
 function usage() {
-    echo "Params:                 <sh_name=setup_rdma.sh>"
+    echo "Params:               <sh_name=setup_spdk_with_latency_test.sh>"
     echo "sh_name:              shell script name"
+    echo "skip_verify:          skip verify the original spdk and its unittest"
 }
+
+### check params ###
+if [ $# -ne 1 ]; then
+    usage
+    exit
+fi
+### end check ######
+
+skip_verify_original_spdk_and_unit_test=$1
 
 function setup_spdk_with_latency_test_fn() {
     install_dependencies
-    build_spdk_with_latency_test
-    unit_test
+    if [ ${skip_verify_original_spdk_and_unit_test} -eq 1 ]; then
+        build_spdk_with_latency_test
+        unit_test
+    fi
 }
 
 ### run

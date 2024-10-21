@@ -22,8 +22,8 @@
 
 set -eu
 
-# myprint enabled/disabled
-myprint=1
+# skip verify the original spdk and its unittest
+skip_verify_original_spdk_and_unit_test=1
 
 # OS is supported? 
 os=$(uname -s)
@@ -148,29 +148,29 @@ ENDSSH
 
 function clone_spdk() {
     local hostname=$1
-#     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
-#             sudo su
-#             cd ${workspace_dir}
-#             git clone --branch v${spdk_version} ${spdk_repo} ./spdk-${spdk_version} && cd ./spdk-${spdk_version}
-#             git submodule update --init
-#             rm -rf ./.git && git init
-#             exit
-# ENDSSH
-    # use my file
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
-        sudo su
-        cd ${workspace_dir}
-        wget https://codeload.github.com/spdk/spdk/zip/refs/heads/v${spdk_version} -O ./spdk-${spdk_version}.zip
-        unzip -d ./ spdk-${spdk_version}.zip
-        cd ./spdk-${spdk_version}
-        git init
-        git remote add origin ${spdk_repo}
-        git fetch
-        git checkout -f -t origin/v${spdk_version}
-        git submodule update --init
-        rm -rf ./.git && git init
-        exit
+            sudo su
+            cd ${workspace_dir}
+            git clone --branch v${spdk_version} ${spdk_repo} ./spdk-${spdk_version} && cd ./spdk-${spdk_version}
+            git submodule update --init
+            rm -rf ./.git && git init
+            exit
 ENDSSH
+    # use my file
+#     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
+#         sudo su
+#         cd ${workspace_dir}
+#         wget https://codeload.github.com/spdk/spdk/zip/refs/heads/v${spdk_version} -O ./spdk-${spdk_version}.zip
+#         unzip -d ./ spdk-${spdk_version}.zip
+#         cd ./spdk-${spdk_version}
+#         git init
+#         git remote add origin ${spdk_repo}
+#         git fetch
+#         git checkout -f -t origin/v${spdk_version}
+#         git submodule update --init
+#         rm -rf ./.git && git init
+#         exit
+# ENDSSH
 }
 
 function clone_latency_test() {
@@ -202,7 +202,7 @@ function setup_spdk_with_latency_test() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
             cd ${spdk_dir}
-            ${setup_dir}/setup_spdk_with_latency_test.sh
+            ${setup_dir}/setup_spdk_with_latency_test.sh ${skip_verify_original_spdk_and_unit_test}
             exit
 ENDSSH
 }

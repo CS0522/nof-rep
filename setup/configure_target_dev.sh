@@ -5,7 +5,7 @@
 # Steps:
 # 1. Re-run ./configure with RDMA and with target latency log;
 # 2. Re-build;
-# 3. Configure Target env: attach ctrlr, create subsys, add ns and so on;
+# 3. Configure Target dev: attach ctrlr, create subsys, add ns and so on;
 # 4. Add listener.
 
 # pwd: spdk_dir
@@ -13,7 +13,7 @@
 set -eu
 
 function usage() {
-    echo "Params:                 <sh_name=configure_target.sh> <is_100g>"
+    echo "Params:                 <sh_name=configure_target_dev.sh> <is_100g>"
     echo "sh_name:              shell script name"
     echo "is_100g:              100 Gbps or normal?"
 }
@@ -51,7 +51,7 @@ function get_bdf() {
 
 function run_nvmf_tgt() {
     # it needs more than 2 cores
-    nohup ./build/bin/nvmf_tgt -m 0x3 &
+    ./build/bin/nvmf_tgt -m 0x3 &
 }
 
 function create_transport() {
@@ -87,17 +87,17 @@ function remove_ns() {
     ./scripts/rpc.py nvmf_remove_ns ${ns_id}
 }
 
-function configure_target_env() {
+function configure_target_dev() {
     echo "Configuring Target Environment..."
     # setup spdk env
-    setup_spdk_env
-    sleep 5s
+    # setup_spdk_env
+    # sleep 5s
     # get bdf addr
 	get_bdf
 	sleep 1s
     # 1. run nvmf_tgt and let it background running
-	run_nvmf_tgt
-    sleep 1s
+	# run_nvmf_tgt
+    # sleep 1s
 	# 2. create transport
 	create_transport
 	sleep 1s
@@ -147,8 +147,8 @@ function remove_listener() {
 }
 
 function configure_target_fn() {
-    rebuild_target_spdk_with_latency_test
-    configure_target_env
+    # rebuild_target_spdk_with_latency_test
+    configure_target_dev
     get_local_ip
     add_listener
     check_listening_status
