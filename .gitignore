@@ -26,3 +26,5 @@ Makefile
 !.gitignore
 !configure
 !CONFIG
+/setup/setup_output
+/setup/run_output

@@ -108,7 +108,7 @@ function output_hostnames() {
     echo "hostnames: "
     local hm_num=0
     while (( ${hm_num}<${node_num} )); do
-        if [ ${hm_num} -eq 0 ]; then
+        if [[ ${hm_num} -eq 0 ]] && [[ ${node_num} -ne 1 ]]; then
             echo "(Host)    node ${hm_num}: ${hostnames[${hm_num}]}"
         else
             echo "(Target)  node ${hm_num}: ${hostnames[${hm_num}]}"
@@ -291,7 +291,7 @@ function setup_all_nodes_fn()
     # write local_ip to nodes_local_ip.txt
     curr_node=0
     while (( ${curr_node}<${node_num} )); do
-        echo "${nodes_local_ip[${curr_node}]}" >> ./setup/${setup_output_dir}/nodes_local_ip.txt
+        echo "${nodes_local_ip[${curr_node}]}" > ./setup/${setup_output_dir}/nodes_local_ip.txt
         
         curr_node=`expr ${curr_node} + 1`
     done
@@ -301,5 +301,4 @@ function setup_all_nodes_fn()
 ### run
 output_hostnames
 setup_all_nodes_fn
-
 echo "All nodes are successfully set!"
