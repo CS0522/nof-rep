@@ -56,7 +56,7 @@ skip_verify_original_spdk_and_unit_test=$1
 
 function setup_spdk_with_latency_test_fn() {
     install_dependencies
-    if [ ${skip_verify_original_spdk_and_unit_test} -eq 1 ]; then
+    if [ ${skip_verify_original_spdk_and_unit_test} -eq 0 ]; then
         build_spdk_with_latency_test
         unit_test
     fi

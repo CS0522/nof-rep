@@ -274,8 +274,9 @@ function setup_all_nodes_fn()
         setup_rdma ${hostname}
         # 4. Setup SPDK vs.24.05.x with latency_test;
         setup_spdk_with_latency_test ${hostname}
+        # If only 1 node, then configure it as Target
         # 5. If is Host, configure host device;
-        if [ ${curr_node} -eq 0 ]; then
+        if [[ ${curr_node} -eq 0 ]] && [[ ${node_num} -ne 1 ]]; then
             configure_host ${hostname}
         # 6. If is Target, configure this target device;
         else

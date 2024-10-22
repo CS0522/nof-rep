@@ -51,7 +51,10 @@ function get_bdf() {
 
 function run_nvmf_tgt() {
     # it needs more than 2 cores
-    nohup ./build/bin/nvmf_tgt -m 0x3 &
+    # throw it to background
+    echo "Starting nvmf_tgt..."
+    ./build/bin/nvmf_tgt -m 0x3 &>/dev/null &
+    echo "Throw it to background"
 }
 
 function create_transport() {
@@ -138,7 +141,6 @@ function check_listening_status() {
         echo "Add listener succeeded. "
         echo "Configure Target succeeded. "
     fi
-    exit
 }
 
 function remove_listener() {
