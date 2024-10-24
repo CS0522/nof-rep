@@ -89,7 +89,11 @@ function get_outputs() {
     local src_file_name=$2
     local dest_file_name=$3
     # scp [args...] <username>@<hostname>:<remote_path> <local_path>
-    scp ${ssh_arg} ${cloudlab_username}@${hostname}:${workspace_dir}/output/${src_file_name} ./setup/${run_output_dir}/${dest_file_name}
+    if scp ${ssh_arg} ${cloudlab_username}@${hostname}:${workspace_dir}/output/${src_file_name} ./setup/${run_output_dir}/${dest_file_name}; then 
+    	echo "transfer OK"
+    else
+    	echo "transfer failed"
+    fi
 }
 
 function get_run_output_fn() {
