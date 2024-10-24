@@ -41,7 +41,7 @@ function usage() {
     echo "!!! Run on local machine !!!"
     echo "All scripts are supposed to be executed under spdk root dir."
     echo ""
-    echo "You should input as:  <sh_name=setup_all_nodes.sh> <cloudlab_username> <is_mlnx> <is_100g> <node_num> [hostnames...]"
+    echo "You should input as:  <sh_name=setup_all_nodes.sh> <is_mlnx> <is_100g> <cloudlab_username> <node_num> [hostnames...]"
     echo "sh_name:              shell script name"
     echo "is_mlnx:              NIC supports RDMA or not?"
     echo "is_100g:              100 Gbps or normal?"
@@ -291,8 +291,11 @@ function setup_all_nodes_fn()
     # write local_ip to nodes_local_ip.txt
     curr_node=0
     while (( ${curr_node}<${node_num} )); do
-        echo "${nodes_local_ip[${curr_node}]}" > ./setup/${setup_output_dir}/nodes_local_ip.txt
-        
+    	if [ ${curr_node} -eq 0 ]; then
+            echo "${nodes_local_ip[${curr_node}]}" > ./setup/${setup_output_dir}/nodes_local_ip.txt
+        else
+            echo "${nodes_local_ip[${curr_node}]}" >> ./setup/${setup_output_dir}/nodes_local_ip.txt
+        fi
         curr_node=`expr ${curr_node} + 1`
     done
 }

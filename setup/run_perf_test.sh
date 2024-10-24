@@ -55,6 +55,9 @@ io_size=$7
 workload=$8
 run_time=$9
 transport_ids=""
+ssh_arg="-o StrictHostKeyChecking=no"
+spdk_dir="/opt/Workspace/spdk-24.05.x"
+workspace_dir="/opt/Workspace"
 
 declare -A nodes_local_ip
 # local_ip=""
@@ -152,7 +155,7 @@ function set_workload() {
 
 # set run_time
 function set_run_time() {
-    io_size="-t ${run_time}"
+    run_time="-t ${run_time}"
 }
 
 # set params funtion
