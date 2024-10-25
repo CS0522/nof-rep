@@ -803,7 +803,7 @@ __bdev_nvme_io_complete(struct spdk_bdev_io *bdev_io, enum spdk_bdev_io_status s
 {
 	spdk_trace_record(TRACE_BDEV_NVME_IO_DONE, 0, 0, (uintptr_t)bdev_io->driver_ctx,
 			  (uintptr_t)bdev_io);
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
 	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
 	struct spdk_nvmf_rdma_request* rdma_req = SPDK_CONTAINEROF(req, struct spdk_nvmf_rdma_request, req); 
@@ -7430,7 +7430,7 @@ static void
 bdev_nvme_writev_done(void *ref, const struct spdk_nvme_cpl *cpl)
 {
 	struct nvme_bdev_io *bio = ref;
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(bio);
 	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
 	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
