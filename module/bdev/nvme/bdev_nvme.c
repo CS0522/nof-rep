@@ -803,6 +803,16 @@ __bdev_nvme_io_complete(struct spdk_bdev_io *bdev_io, enum spdk_bdev_io_status s
 {
 	spdk_trace_record(TRACE_BDEV_NVME_IO_DONE, 0, 0, (uintptr_t)bdev_io->driver_ctx,
 			  (uintptr_t)bdev_io);
+	#ifdef LANTENCY_LOG
+	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
+	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
+	struct spdk_nvmf_rdma_request* rdma_req = SPDK_CONTAINEROF(req, struct spdk_nvmf_rdma_request, req); 
+    	latency_log->io_id = rdma_req->io_id;
+    	latency_log->module = "nvme driver";
+    	latency_log->start_time = bdev_io->start_time;
+	clock_gettime(CLOCK_REALTIME, &latency_log->end_time);
+	spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, latency_log);
+	#endif
 	if (cpl) {
 		spdk_bdev_io_complete_nvme_status(bdev_io, cpl->cdw0, cpl->status.sct, cpl->status.sc);
 	} else {
@@ -1264,6 +1274,7 @@ bdev_nvme_update_io_path_stat(struct nvme_bdev_io *bio)
 	}
 
 	tsc_diff = spdk_get_ticks() - bio->submit_tsc;
+	/*
 	#ifdef TARGET_LATENCY_LOG
 	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
 	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
@@ -1274,6 +1285,7 @@ bdev_nvme_update_io_path_stat(struct nvme_bdev_io *bio)
 	clock_gettime(CLOCK_REALTIME, &latency_log->end_time);
 	spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, latency_log);
 	#endif
+	*/
 	stat = bio->io_path->stat;
 
 	switch (bdev_io->type) {
@@ -7418,6 +7430,17 @@ static void
 bdev_nvme_writev_done(void *ref, const struct spdk_nvme_cpl *cpl)
 {
 	struct nvme_bdev_io *bio = ref;
+	#ifdef LANTENCY_LOG
+	struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(bio);
+	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
+	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
+	struct spdk_nvmf_rdma_request* rdma_req = SPDK_CONTAINEROF(req, struct spdk_nvmf_rdma_request, req); 
+    	latency_log->io_id = rdma_req->io_id;
+    	latency_log->module = "ssd";
+    	latency_log->start_time = bio->start_time_ssd;
+	latency_log->end_time = bio->end_time_ssd;
+	spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, latency_log);
+	#endif
 
 	if (spdk_unlikely(spdk_nvme_cpl_is_pi_error(cpl))) {
 		SPDK_ERRLOG("writev completed with PI error (sct=%d, sc=%d)\n",
