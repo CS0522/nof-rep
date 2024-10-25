@@ -1049,7 +1049,7 @@ nvme_rdma_create_reqs(struct nvme_rdma_qpair *rqpair)
 		rdma_req->send_sgl[0].addr = (uint64_t)cmd;
 		rdma_req->send_wr.wr_id = (uint64_t)&rdma_req->rdma_wr;
 		rdma_req->send_wr.next = NULL;
-		rdma_req->send_wr.opcode = IBV_WR_SEND;
+		rdma_req->send_wr.opcode = IBV_WR_SEND_WITH_IMM;
 		rdma_req->send_wr.send_flags = IBV_SEND_SIGNALED;
 		rdma_req->send_wr.sg_list = rdma_req->send_sgl;
 		rdma_req->send_wr.imm_data = 0;
