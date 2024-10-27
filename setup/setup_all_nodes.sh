@@ -10,7 +10,7 @@
 # 0. Install and configure git and make directories;
 # 1. Clone SPDK vs.24.05.x and reinit a local git repo;
 # 2. Clone latency_test code to get setup scripts;
-# 3. Setup RDMA Soft-RoCE / RDMA RoCE;
+# 3. Setup RDMA;
 # 4. Setup SPDK vs.24.05.x with latency_test;
 # 5. If is Host, configure host device.
 # 6. If is Target, configure this target device;
@@ -289,13 +289,11 @@ function setup_all_nodes_fn()
     done
 
     # write local_ip to nodes_local_ip.txt
+    # first delete the file if already exists
+    sudo rm -rf ./setup/${setup_output_dir}/nodes_local_ip.txt
     curr_node=0
     while (( ${curr_node}<${node_num} )); do
-    	if [ ${curr_node} -eq 0 ]; then
-            echo "${nodes_local_ip[${curr_node}]}" > ./setup/${setup_output_dir}/nodes_local_ip.txt
-        else
-            echo "${nodes_local_ip[${curr_node}]}" >> ./setup/${setup_output_dir}/nodes_local_ip.txt
-        fi
+        echo "${nodes_local_ip[${curr_node}]}" >> ./setup/${setup_output_dir}/nodes_local_ip.txt
         curr_node=`expr ${curr_node} + 1`
     done
 }
