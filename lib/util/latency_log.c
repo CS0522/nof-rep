@@ -26,6 +26,7 @@ void write_log_to_file(uint32_t io_id, const char* module, struct timespec start
 		sprintf(log_temp_char, "%s%u,%s,%llu:%llu,%llu:%llu\n", log_temp_char, io_id, module, start_time.tv_sec, start_time.tv_nsec, end_time.tv_sec, end_time.tv_nsec);
 		if(log_num == UPDATE_PERIOD){
 			FILE* file = fopen(TARGET_LOG_FILE_PATH, "w+");
+			fprintf(file, "io_id, modeule_name, start_time.tv_sec:start_time.nsec, end_time.tv_sec:end_time.tv_nsec\n");
 			fprintf(file, "%s", log_temp_char);
 			fclose(file);
 			memset(log_temp_char, 0, MAX_CHAR_CACHE);
