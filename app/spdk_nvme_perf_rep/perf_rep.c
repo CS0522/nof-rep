@@ -333,6 +333,7 @@ uint8_t *g_psk = NULL;
  * TODO: 后续需要添加支持用 option 来修改
  */
 static uint32_t g_rep_num = 3;
+static bool g_send_main_rep_finally = false;
 
 #ifdef PERF_LATENCY_LOG
 /** 消息队列 id */
@@ -1978,11 +1979,17 @@ submit_io_rep(struct worker_thread *worker, int queue_depth)
         TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
             if(is_main){
                 main_task = allocate_main_task(ns_ctx, queue_depth, io_id);
+				if(g_send_main_rep_finally){
+					TAILQ_REMOVE(&main_task->rep_tasks, main_task, link);
+				}
                 is_main = false;
             } else {
                 copy_task(main_task, ns_ctx);
             }
         }
+		if(g_send_main_rep_finally){
+			TAILQ_INSERT_TAIL(&main_task->rep_tasks, main_task, link);
+		}
         submit_single_io_rep(main_task);
         io_id ++;
     }
@@ -2224,6 +2231,54 @@ work_fn(void *arg)
 	return 0;
 }
 
+static int
+main_work_fn()
+{
+	uint64_t tsc_start, tsc_end, tsc_current, tsc_next_print;
+	bool warmup = false;
+
+	tsc_start = spdk_get_ticks();
+	tsc_current = tsc_start;
+	tsc_next_print = tsc_current + g_tsc_rate;
+
+	if (g_warmup_time_in_sec) {
+		warmup = true;
+		tsc_end = tsc_current + g_warmup_time_in_sec * g_tsc_rate;
+	} else {
+		tsc_end = tsc_current + g_time_in_sec * g_tsc_rate;
+	}
+
+	while (spdk_likely(!g_exit)) {
+
+		tsc_current = spdk_get_ticks();
+
+		if (tsc_current > tsc_next_print) {
+			tsc_next_print += g_tsc_rate;
+			print_periodic_performance(warmup);
+		}
+
+		if (tsc_current > tsc_end) {
+			if (warmup) {
+				/* Update test start and end time, clear statistics */
+				tsc_start = spdk_get_ticks();
+				tsc_end = tsc_start + g_time_in_sec * g_tsc_rate;
+				if (isatty(STDOUT_FILENO)) {
+					/* warmup stage prints a longer string to stdout, need to erase it */
+					printf("%c[2K", 27);
+				}
+
+				warmup = false;
+			} else {
+				break;
+			}
+		}
+	}
+
+	g_elapsed_time_in_usec = (tsc_current - tsc_start) * SPDK_SEC_TO_USEC / g_tsc_rate;
+
+	return 0;
+}
+
 static void
 usage(char *program_name)
 {
@@ -2233,6 +2288,7 @@ usage(char *program_name)
 #endif
 	printf("\n\n");
 	printf("==== BASIC OPTIONS ====\n\n");
+	printf("\t-f, --final-send-main-rep if send main rep finally\n");
     // 添加 副本个数 参数
     printf("\t-n, --rep-num <val> replica num of tasks\n");
     // (val/3) depth for each qp
@@ -2756,9 +2812,12 @@ parse_metadata(const char *metacfg_str)
 	return 0;
 }
 
-#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:n:"
+#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:n:f"
 
 static const struct option g_perf_cmdline_opts[] = {
+// 默认情况下主副本第一个传输，否则最后一个传输
+#define FINAL_SEND_MAIN_REP 'f'
+    {"final-send-main-rep",     no_argument, NULL, FINAL_SEND_MAIN_REP},
 // 添加 副本个数 参数
 #define PERF_REP_NUM    'n'
     {"rep-num",     required_argument, NULL, PERF_REP_NUM},
@@ -3038,6 +3097,9 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 			spdk_log_set_print_level(SPDK_LOG_DEBUG);
 			break;
 #endif
+		case FINAL_SEND_MAIN_REP:
+			g_send_main_rep_finally = true;
+			break;
 		case PERF_ENABLE_TCP_HDGST:
 			g_header_digest = 1;
 			break;
@@ -3271,6 +3333,30 @@ register_workers(void)
 	uint32_t i;
 	struct worker_thread *worker;
 
+#ifdef PERF_LATENCY_LOG
+	int core_num = 0;
+	g_main_core = spdk_env_get_current_core();
+	SPDK_ENV_FOREACH_CORE(i) {
+		core_num++;
+		if(i == g_main_core){
+			continue;
+		}
+		worker = calloc(1, sizeof(*worker));
+		if (worker == NULL) {
+			fprintf(stderr, "Unable to allocate worker\n");
+			return -1;
+		}
+
+		TAILQ_INIT(&worker->ns_ctx);
+		worker->lcore = i;
+		TAILQ_INSERT_TAIL(&g_workers, worker, link);
+		g_num_workers++;
+	}
+	if(core_num < 2){
+		fprintf(stderr, "The cpu_core_num of perf should more than 1\n");
+		return -1;
+	}
+#else
 	SPDK_ENV_FOREACH_CORE(i) {
 		worker = calloc(1, sizeof(*worker));
 		if (worker == NULL) {
@@ -3283,6 +3369,7 @@ register_workers(void)
 		TAILQ_INSERT_TAIL(&g_workers, worker, link);
 		g_num_workers++;
 	}
+#endif
 
 	return 0;
 }
@@ -3865,7 +3952,8 @@ main(int argc, char **argv)
 	}
 
 	assert(main_worker != NULL);
-	work_fn(main_worker);
+	//work_fn(main_worker);
+	main_work_fn();
 
 	spdk_env_thread_wait_all();
 

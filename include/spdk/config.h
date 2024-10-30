@@ -14,12 +14,12 @@
 #define SPDK_CONFIG_DAOS_DIR 
 #undef SPDK_CONFIG_DEBUG
 #undef SPDK_CONFIG_DPDK_COMPRESSDEV
-#define SPDK_CONFIG_DPDK_DIR /home/frank/Workspace/spdk-24.05.x/dpdk/build
+#define SPDK_CONFIG_DPDK_DIR /home/ice-cream/spdk/dpdk/build
 #define SPDK_CONFIG_DPDK_INC_DIR 
 #define SPDK_CONFIG_DPDK_LIB_DIR 
 #undef SPDK_CONFIG_DPDK_PKG_CONFIG
 #undef SPDK_CONFIG_DPDK_UADK
-#define SPDK_CONFIG_ENV /home/frank/Workspace/spdk-24.05.x/lib/env_dpdk
+#define SPDK_CONFIG_ENV /home/ice-cream/spdk/lib/env_dpdk
 #define SPDK_CONFIG_EXAMPLES 1
 #undef SPDK_CONFIG_FC
 #define SPDK_CONFIG_FC_PATH 

@@ -2043,6 +2043,54 @@ work_fn(void *arg)
 	return 0;
 }
 
+static int
+main_work_fn()
+{
+	uint64_t tsc_start, tsc_end, tsc_current, tsc_next_print;
+	bool warmup = false;
+
+	tsc_start = spdk_get_ticks();
+	tsc_current = tsc_start;
+	tsc_next_print = tsc_current + g_tsc_rate;
+
+	if (g_warmup_time_in_sec) {
+		warmup = true;
+		tsc_end = tsc_current + g_warmup_time_in_sec * g_tsc_rate;
+	} else {
+		tsc_end = tsc_current + g_time_in_sec * g_tsc_rate;
+	}
+
+	while (spdk_likely(!g_exit)) {
+
+		tsc_current = spdk_get_ticks();
+
+		if (tsc_current > tsc_next_print) {
+			tsc_next_print += g_tsc_rate;
+			print_periodic_performance(warmup);
+		}
+
+		if (tsc_current > tsc_end) {
+			if (warmup) {
+				/* Update test start and end time, clear statistics */
+				tsc_start = spdk_get_ticks();
+				tsc_end = tsc_start + g_time_in_sec * g_tsc_rate;
+				if (isatty(STDOUT_FILENO)) {
+					/* warmup stage prints a longer string to stdout, need to erase it */
+					printf("%c[2K", 27);
+				}
+
+				warmup = false;
+			} else {
+				break;
+			}
+		}
+	}
+
+	g_elapsed_time_in_usec = (tsc_current - tsc_start) * SPDK_SEC_TO_USEC / g_tsc_rate;
+
+	return 0;
+}
+
 static void
 usage(char *program_name)
 {
@@ -3069,6 +3117,30 @@ register_workers(void)
 	uint32_t i;
 	struct worker_thread *worker;
 
+#ifdef PERF_LATENCY_LOG
+	int core_num = 0;
+	g_main_core = spdk_env_get_current_core();
+	SPDK_ENV_FOREACH_CORE(i) {
+		core_num++;
+		if(i == g_main_core){
+			continue;
+		}
+		worker = calloc(1, sizeof(*worker));
+		if (worker == NULL) {
+			fprintf(stderr, "Unable to allocate worker\n");
+			return -1;
+		}
+
+		TAILQ_INIT(&worker->ns_ctx);
+		worker->lcore = i;
+		TAILQ_INSERT_TAIL(&g_workers, worker, link);
+		g_num_workers++;
+	}
+	if(core_num < 2){
+		fprintf(stderr, "The cpu_core_num of perf should more than 1\n");
+		return -1;
+	}
+#else
 	SPDK_ENV_FOREACH_CORE(i) {
 		worker = calloc(1, sizeof(*worker));
 		if (worker == NULL) {
@@ -3081,6 +3153,7 @@ register_workers(void)
 		TAILQ_INSERT_TAIL(&g_workers, worker, link);
 		g_num_workers++;
 	}
+#endif
 
 	return 0;
 }
@@ -3658,7 +3731,8 @@ main(int argc, char **argv)
 	}
 
 	assert(main_worker != NULL);
-	work_fn(main_worker);
+	//work_fn(main_worker);
+	main_work_fn();
 
 	spdk_env_thread_wait_all();
 
