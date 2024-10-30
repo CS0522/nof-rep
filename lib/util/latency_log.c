@@ -48,6 +48,7 @@ void write_latency_log(void* ctx){
 
 #ifdef PERF_LATENCY_LOG
 static int g_print_first_create_time_flag = 1;
+static bool if_open = false;
 
 /**
  * @name: write_log_tasks_to_file
@@ -65,7 +66,12 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task,
     // myprint
     // printf("进入 write_log_tasks_to_file\n");
 
-    FILE *file = fopen(HOST_LOG_FILE_PATH, "a+");
+    FILE *file;
+    if(!if_open){
+        file = fopen(HOST_LOG_FILE_PATH, "w+");
+    }else{
+        file = fopen(HOST_LOG_FILE_PATH, "a");
+    }
     // 打开失败
     if (!file)
     {
@@ -73,13 +79,21 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task,
         // exit(EXIT_FAILURE);
         goto err;
     }
-    char ch = fgetc(file);
-    // 空文件则添加 title
-    if (ch == EOF)
-    {
+
+    if(!if_open){
+        if_open = true;
         printf("File %s is empty, write the title line\n", HOST_LOG_FILE_PATH);
         fprintf(file, "io_id:ns_index,is_main_task,create_time,submit_time,complete_time,all_complete_time,first_create_time\n");
     }
+    
+    //char ch = fgetc(file);
+    //printf("%c\n", ch);
+    // 空文件则添加 title
+    //if (ch == EOF)
+    //{
+    //    printf("File %s is empty, write the title line\n", HOST_LOG_FILE_PATH);
+    //    fprintf(file, "io_id:ns_index,is_main_task,create_time,submit_time,complete_time,all_complete_time,first_create_time\n");
+    //}
     // 写入记录数据
     fprintf(file, "%u:%d,%d,%llu:%llu,%llu:%llu,%llu:%llu,%llu:%llu", io_id, ns_index, is_main_task,
                                     create_time.tv_sec, create_time.tv_nsec, 
