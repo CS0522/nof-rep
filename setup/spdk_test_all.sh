@@ -377,6 +377,7 @@ function performance_bottleneck_test(){
         else
             configure_log_off ${hostname} ${host_spdk_dir} ${host_setup_dir}
         fi
+        curr_node=`expr ${curr_node} + 1`
     done
     local io_size=1024
     while (( ${io_size}<${1048577} )); do
