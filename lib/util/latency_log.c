@@ -130,8 +130,13 @@ int get_ns_index(char *name, char **g_ns_name, uint32_t g_ns_num)
 
     char split_name[1024];
     char tmp[10];
-    sscanf(name, "RDMA (addr:%[0-9.] subnqn:%*[a-zA-Z0-9.:*-]) NSID %[0-9]", split_name, tmp);
-    strcat(split_name, tmp);
+    if(!strncmp(name, "PCIE", 4)){
+    	sscanf(name, "PCIE (%[0-9:.]) NSID %[0-9]", split_name, tmp);
+    	strcat(split_name, tmp);
+    }else{
+    	sscanf(name, "RDMA (addr:%[0-9.] subnqn:%*[a-zA-Z0-9.:*-]) NSID %[0-9]", split_name, tmp);
+    	strcat(split_name, tmp);
+    }
 
     int index = 0;
     for (; index < g_ns_num; ++index)

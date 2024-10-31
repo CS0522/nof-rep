@@ -2231,6 +2231,7 @@ work_fn(void *arg)
 	return 0;
 }
 
+#ifdef PERF_LATENCY_LOG
 static int
 main_work_fn()
 {
@@ -2278,6 +2279,7 @@ main_work_fn()
 
 	return 0;
 }
+#endif
 
 static void
 usage(char *program_name)
@@ -3789,10 +3791,16 @@ init_ns_name_index_mapping(void)
     {
         g_ns_name[ns_cnt] = (char *)malloc(1024 * sizeof(char));
         char tmp[10];
-        // 考虑 addr + nsid 来标识唯一 ns
-        // addr + subnqn + nsid 来进行字符串匹配、时间开销较大
-        sscanf(entry_tmp->name, "RDMA (addr:%[0-9.] subnqn:%*[a-zA-Z0-9.:*-]) NSID %[0-9]", g_ns_name[ns_cnt], tmp);
-        strcat(g_ns_name[ns_cnt], tmp);
+
+		if(!strncmp(entry_tmp->name, "PCIE", 4)){
+			sscanf(entry_tmp->name, "PCIE (%[0-9:.]) NSID %[0-9]", g_ns_name[ns_cnt], tmp);
+			strcat(g_ns_name[ns_cnt], tmp);
+		}else{
+			// 考虑 addr + nsid 来标识唯一 ns
+			// addr + subnqn + nsid 来进行字符串匹配、时间开销较大
+        	sscanf(entry_tmp->name, "RDMA (addr:%[0-9.] subnqn:%*[a-zA-Z0-9.:*-]) NSID %[0-9]", g_ns_name[ns_cnt], tmp);
+        	strcat(g_ns_name[ns_cnt], tmp);
+		}
 
         ++ns_cnt;
     }
@@ -3951,9 +3959,13 @@ main(int argc, char **argv)
 		}
 	}
 
-	assert(main_worker != NULL);
-	//work_fn(main_worker);
+	//assert(main_worker != NULL);
+
+#ifdef PERF_LATENCY_LOG
 	main_work_fn();
+#else
+	work_fn(main_worker);
+#endif
 
 	spdk_env_thread_wait_all();
 
