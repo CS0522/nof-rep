@@ -32,6 +32,8 @@ function usage() {
     echo "io_size:              io size in bytes"
     echo "workload:             val: < randrw | randwrite | randread >"
     echo "run_time:             value in seconds"
+    echo "host_status:          host status: < 0:The host side only runs the perf program; 1:The host side runs the target and perf program simultaneously; 2:The host side connects to the local PCIe NVMe SSD>"
+    echo "send_main_rep_finally:is main_rep the last transmission"
     echo ""
 
     echo "help --help -h:       show script usage"
@@ -54,9 +56,11 @@ io_queue_depth=$6
 io_size=$7
 workload=$8
 run_time=$9
+host_status=${10}
+send_main_rep_finally=${11}
 transport_ids=""
 ssh_arg="-o StrictHostKeyChecking=no"
-spdk_dir="/opt/Workspace/spdk-24.05.x"
+spdk_dir="/opt/Workspace/spdk-24.05.x-host"
 workspace_dir="/opt/Workspace"
 
 declare -A nodes_local_ip
@@ -88,6 +92,12 @@ if [ ${error_params} -ne 0 ]; then
     usage
     exit
 fi
+if [[ -z "${host_status}" ]]; then
+    host_status=0
+fi
+if [[ -z "${send_main_rep_finally}"]]; then
+    send_main_rep_finally=0
+fi
 ### end check ######
 
 # read nodes local ip from file
@@ -99,10 +109,22 @@ function get_nodes_local_ip() {
 
         curr_node=`expr ${curr_node} + 1`
     done
-    if [ ${node_num} -ne ${curr_node} ]; then
-        echo "node_num is not equal to the number of nodes local ip. "
+    if [ ${node_num} -gt ${curr_node} ]; then
+        echo "node_num is greater than the number of nodes local ip. "
         exit
     fi
+}
+
+bdf=""
+
+function get_bdf() {
+    bdf=$(
+    ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
+        sudo su
+        cd ${spdk_dir}
+        ./scripts/setup.sh status 2>&1 | grep NVMe | tail -n 1 | awk '{print $2}
+ENDSSH
+    )
 }
 
 # get local IP address
@@ -119,9 +141,15 @@ function set_transport_ids() {
     while (( ${curr_node}<${node_num} )); do
         # if IP is host's IP, skip the loop
         # if [[ "${local_ip}" == "${nodes_local_ip[${curr_node}]}" ]]; then
-        if [ ${curr_node} -eq 0 ]; then
+        if [[ ${curr_node} -eq 0 ]] && [[ ${host_status} -eq 0 ]]; then
             curr_node=`expr ${curr_node} + 1`
             continue
+        else
+            if [[ ${curr_node} -eq 0 ]] && [[ ${host_status} -eq 2 ]]; then
+                transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf}'"
+                curr_node=`expr ${curr_node} + 1`
+                continue
+            fi
         fi
         # target's IP
         transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:${nodes_local_ip[${curr_node}]} trsvcid:4420'"
@@ -158,6 +186,14 @@ function set_run_time() {
     run_time="-t ${run_time}"
 }
 
+function set_send_main_rep_finally() {
+    if [[ ${send_main_rep_finally} -eq 0 ]]; then
+        send_main_rep_finally=""
+    else
+        send_main_rep_finally="-f"
+    fi
+}
+
 # set params funtion
 function set_params() {
     get_nodes_local_ip
@@ -167,13 +203,14 @@ function set_params() {
     set_io_size
     set_workload
     set_run_time
+    set_send_main_rep_dinally
 }
 
 function run_perf() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0x3 >> ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0x3 ${send_main_rep_finally} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
@@ -182,12 +219,13 @@ function run_perf_rep() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0x3 >> ${workspace_dir}/output/perf_rep_output.log
+        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0x3 ${send_main_rep_finnally} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
 
 function run_perf_test_fn() {
+    get_bdf
     set_params
     if [[ "${run_app}" == "perf" ]]; then
         run_perf

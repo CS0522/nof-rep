@@ -78,7 +78,7 @@ function configure_target_dev() {
 	get_bdf
 	sleep 1s
     # 1. run nvmf_tgt and let it background running
-	# run_nvmf_tgt
+	run_nvmf_tgt
     # sleep 1s
 	# 2. create transport
 	create_transport
