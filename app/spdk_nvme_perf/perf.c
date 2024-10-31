@@ -2043,7 +2043,7 @@ work_fn(void *arg)
 	return 0;
 }
 
-#ifdef PERF_LATENCY_LOG
+#ifdef PERF_IO_WORKER_EXCLUSIVE_CORE
 static int
 main_work_fn()
 {
@@ -3119,7 +3119,7 @@ register_workers(void)
 	uint32_t i;
 	struct worker_thread *worker;
 
-#ifdef PERF_LATENCY_LOG
+#ifdef PERF_IO_WORKER_EXCLUSIVE_CORE
 	int core_num = 0;
 	g_main_core = spdk_env_get_current_core();
 	SPDK_ENV_FOREACH_CORE(i) {
@@ -3737,10 +3737,10 @@ main(int argc, char **argv)
 		}
 	}
 
-	//assert(main_worker != NULL);
-#ifdef PERF_LATENCY_LOG
+#ifdef PERF_IO_WORKER_EXCLUSIVE_CORE
 	main_work_fn();
 #else
+	assert(main_worker != NULL);
 	work_fn(main_worker);
 #endif
 
