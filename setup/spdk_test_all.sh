@@ -280,7 +280,7 @@ function configure_log_off(){
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
             cd ${spdk_dir}
-            ${setup_dir}/spdk_test_all_configure_log_off
+            ${setup_dir}/spdk_test_all_configure_log_off.sh
             exit
 ENDSSH
 }
