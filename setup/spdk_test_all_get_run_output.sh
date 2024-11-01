@@ -38,7 +38,7 @@ function usage() {
 }
 
 # need for help
-if [[ $# -lt 3 ]] || [[ $# -gt 6 ]] || [[ "$1" == "help" ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+if [[ $# -lt 3 ]] || [[ $# -gt 9 ]] || [[ "$1" == "help" ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
     usage
     exit
 fi
@@ -67,13 +67,13 @@ declare -A hostnames
 hostname_num=0
 # arg_pos moves left 2
 # means the previous $3 turns into the current $1
-shift 2
+shift 5
 for param in "$@"; do
     # store hostnames
     hostnames[${hostname_num}]=${param}
     hostname_num=`expr ${hostname_num} + 1`
 done
-if [ ${node_num} -ne ${hostname_num} ]; then
+if [ ${node_num} -gt ${hostname_num} ]; then
     echo "hostname_num is not equal to node_num."
     exit
 fi

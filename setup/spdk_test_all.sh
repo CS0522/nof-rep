@@ -258,7 +258,7 @@ function configure_target() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
             sudo su
             cd ${target_spdk_dir}
-            ${target_setup_dir}/spdk_test_all_configure_target.sh ${is_100g}
+            ${target_setup_dir}/spdk_test_all_configure_target.sh
             exit
 ENDSSH
 }
@@ -368,47 +368,247 @@ function shutdown_target(){
 ENDSSH
 }
 
-function performance_bottleneck_test(){
+function configure_all_nodes_without_log(){
     local curr_node=0
     while (( ${curr_node}<${node_num} )); do
         local hostname=${hostnames[${curr_node}]}
         if [ ${curr_node} -eq 0 ]; then
             configure_log_off ${hostname} ${host_spdk_dir} ${host_setup_dir}
+            configure_log_off ${hostname} ${target_spdk_dir} ${target_setup_dir}
         else
-            configure_log_off ${hostname} ${host_spdk_dir} ${host_setup_dir}
+            configure_log_off ${hostname} ${target_spdk_dir} ${target_setup_dir}
         fi
         curr_node=`expr ${curr_node} + 1`
     done
+}
+
+function cofigure_all_nodes_wtih_log(){
+    local curr_node=0
+    while (( ${curr_node}<${node_num} )); do
+        local hostname=${hostnames[${curr_node}]}
+        if [ ${curr_node} -eq 0 ]; then
+            configure_host ${hostname}
+            configure_target ${hostname}
+        else
+            configure_target ${hostname}
+        fi
+        curr_node=`expr ${curr_node} + 1`
+    done
+}
+
+function performance_bottleneck_test_remote_target(){
     local io_size=1024
-    while (( ${io_size}<${1048577} )); do
+    while (( ${io_size}<1048577 )); do
         local hostname=${hostnames[0]}
         local targetname=${hostnames[1]}
         run_target ${targetname}
-        sleep 5s
-        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 2 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randread 60 0 0
-        sleep 5s
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 2 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randread 1 0 0
         shutdown_target ${targetname}
-        sleep 5s
-        mkdir -p ./setup/${run_output_dir}/without_log_singer_target_randread_io-size-${io_size}
-        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 2 0 1 without_log_singer_target_randread_io-size-${io_size} ${hostname} ${targetname}
-        sleep 5s
-        shutdown_target ${targetname}
+        mkdir -p ./setup/${run_output_dir}/without_log_single_remote_target_randread_io-size-${io_size}
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 2 0 1 without_log_single_remote_target_randread_io-size-${io_size} ${hostname} ${targetname}
         io_size=`expr ${io_size} \* 2`
     done
     io_size=1024
-    while (( ${io_size}<${1048577} )); do
+    while (( ${io_size}<1048577 )); do
         local hostname=${hostnames[0]}
         local targetname=${hostnames[1]}
         run_target ${targetname}
-        sleep 5s
-        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 2 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 60 0 0
-        sleep 5s
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 2 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 1 0 0
         shutdown_target ${targetname}
-        sleep 5s
-        mkdir -p ./setup/${run_output_dir}/without_log_singer_target_randwrite_io-size-${io_size}
-        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 2 0 1 without_log_singer_target_randwrite_io-size-${io_size} ${hostname} ${targetname}
-        sleep 5s
+        mkdir -p ./setup/${run_output_dir}/without_log_single_remote_target_randwrite_io-size-${io_size}
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 2 0 1 without_log_single_remote_target_randwrite_io-size-${io_size} ${hostname} ${targetname}
+        io_size=`expr ${io_size} \* 2`
+    done
+}
+
+function performance_bottleneck_test_local_target(){
+    local io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname=${hostnames[0]}
+        run_target ${targetname}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 1 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randread 1 1 0
         shutdown_target ${targetname}
+        mkdir -p ./setup/${run_output_dir}/without_log_single_local_target_randread_io-size-${io_size}
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 1 1 1 without_log_single_local_target_randread_io-size-${io_size} ${hostname}
+        io_size=`expr ${io_size} \* 2`
+    done
+    io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname=${hostnames[0]}
+        run_target ${targetname}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 1 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 1 1 0
+        shutdown_target ${targetname}
+        mkdir -p ./setup/${run_output_dir}/without_log_single_local_target_randwrite_io-size-${io_size}
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 1 1 1 without_log_single_local_target_randwrite_io-size-${io_size} ${hostname}
+        io_size=`expr ${io_size} \* 2`
+    done
+}
+
+function performance_bottleneck_test_local_pcie(){
+    local io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 1 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randread 1 2 0
+        mkdir -p ./setup/${run_output_dir}/without_log_single_local_pcie_randread_io-size-${io_size}
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 1 2 1 without_log_single_local_pcie_randread_io-size-${io_size} ${hostname}
+        io_size=`expr ${io_size} \* 2`
+    done
+    io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 1 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 1 2 0
+        mkdir -p ./setup/${run_output_dir}/without_log_single_local_pcie_randwrite_io-size-${io_size}
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 1 2 1 without_log_single_local_pcie_randwrite_io-size-${io_size} ${hostname}
+        io_size=`expr ${io_size} \* 2`
+    done
+}
+
+function performance_rep_remote_target(){
+    local io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname1=${hostnames[1]}
+        local targetname2=${hostnames[2]}
+        local targetname3=${hostnames[3]}
+        run_target ${targetname1}
+        run_target ${targetname2}
+        run_target ${targetname3}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf_rep 4 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 3 0 0
+        shutdown_target ${targetname1}
+        shutdown_target ${targetname2}
+        shutdown_target ${targetname3}
+        mkdir -p ./setup/${run_output_dir}/without_log_rep_remote_target_randwrite_io-size-${io_size}-sequence
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 4 0 0 without_log_rep_remote_target_randwrite_io-size-${io_size}-sequence ${hostname} ${targetname1} ${targetname2} ${targetname3}
+        io_size=`expr ${io_size} \* 2`
+    done
+    io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname1=${hostnames[1]}
+        local targetname2=${hostnames[2]}
+        local targetname3=${hostnames[3]}
+        run_target ${targetname1}
+        run_target ${targetname2}
+        run_target ${targetname3}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf_rep 4 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 3 0 1
+        shutdown_target ${targetname1}
+        shutdown_target ${targetname2}
+        shutdown_target ${targetname3}
+        mkdir -p ./setup/${run_output_dir}/without_log_rep_remote_target_randwrite_io-size-${io_size}-reverse
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 4 0 0 without_log_rep_remote_target_randwrite_io-size-${io_size}-reverse ${hostname} ${targetname1} ${targetname2} ${targetname3}
+        io_size=`expr ${io_size} \* 2`
+    done
+}
+
+function performance_rep_local_target(){
+    local io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname1=${hostnames[0]}
+        local targetname2=${hostnames[1]}
+        local targetname3=${hostnames[2]}
+        run_target ${targetname1}
+        run_target ${targetname2}
+        run_target ${targetname3}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf_rep 3 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 3 1 0
+        shutdown_target ${targetname1}
+        shutdown_target ${targetname2}
+        shutdown_target ${targetname3}
+        mkdir -p ./setup/${run_output_dir}/without_log_rep_local_target_randwrite_io-size-${io_size}-sequence
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 3 1 0 without_log_rep_local_target_randwrite_io-size-${io_size}-sequence ${hostname} ${targetname1} ${targetname2}
+        io_size=`expr ${io_size} \* 2`
+    done
+    io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname1=${hostnames[0]}
+        local targetname2=${hostnames[1]}
+        local targetname3=${hostnames[2]}
+        run_target ${targetname1}
+        run_target ${targetname2}
+        run_target ${targetname3}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf_rep 3 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 3 1 1
+        shutdown_target ${targetname1}
+        shutdown_target ${targetname2}
+        shutdown_target ${targetname3}
+        mkdir -p ./setup/${run_output_dir}/without_log_rep_local_target_randwrite_io-size-${io_size}-reverse
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 3 1 0 without_log_rep_local_target_randwrite_io-size-${io_size}-reverse ${hostname} ${targetname1} ${targetname2}
+        io_size=`expr ${io_size} \* 2`
+    done
+}
+
+function performance_perf_three_different_io_target_remote(){
+    local io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname1=${hostnames[1]}
+        local targetname2=${hostnames[2]}
+        local targetname3=${hostnames[3]}
+        run_target ${targetname1}
+        run_target ${targetname2}
+        run_target ${targetname3}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 4 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 3 0 0
+        shutdown_target ${targetname1}
+        shutdown_target ${targetname2}
+        shutdown_target ${targetname3}
+        mkdir -p ./setup/${run_output_dir}/without_log_rep_remote_target_randwrite_io-size-${io_size}-sequence-three-different-io-target
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 4 0 0 without_log_rep_remote_target_randwrite_io-size-${io_size}-sequence-three-different-io-target ${hostname} ${targetname1} ${targetname2} ${targetname3}
+        io_size=`expr ${io_size} \* 2`
+    done
+    io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname1=${hostnames[1]}
+        local targetname2=${hostnames[2]}
+        local targetname3=${hostnames[3]}
+        run_target ${targetname1}
+        run_target ${targetname2}
+        run_target ${targetname3}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 4 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 3 0 1
+        shutdown_target ${targetname1}
+        shutdown_target ${targetname2}
+        shutdown_target ${targetname3}
+        mkdir -p ./setup/${run_output_dir}/without_log_rep_remote_target_randwrite_io-size-${io_size}-reverse-three-different-io-target
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 4 0 0 without_log_rep_remote_target_randwrite_io-size-${io_size}-reverse-three-different-io-target ${hostname} ${targetname1} ${targetname2} ${targetname3}
+        io_size=`expr ${io_size} \* 2`
+    done
+}
+
+function performance_perf_three_different_io_target_local(){
+    local io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname1=${hostnames[0]}
+        local targetname2=${hostnames[1]}
+        local targetname3=${hostnames[2]}
+        run_target ${targetname1}
+        run_target ${targetname2}
+        run_target ${targetname3}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 3 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 3 1 0
+        shutdown_target ${targetname1}
+        shutdown_target ${targetname2}
+        shutdown_target ${targetname3}
+        mkdir -p ./setup/${run_output_dir}/without_log_rep_local_target_randwrite_io-size-${io_size}-sequence-three-different-io-target
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 3 1 0 without_log_rep_local_target_randwrite_io-size-${io_size}-sequence-three-different-io-target ${hostname} ${targetname1} ${targetname2}
+        io_size=`expr ${io_size} \* 2`
+    done
+    io_size=1024
+    while (( ${io_size}<1048577 )); do
+        local hostname=${hostnames[0]}
+        local targetname1=${hostnames[0]}
+        local targetname2=${hostnames[1]}
+        local targetname3=${hostnames[2]}
+        run_target ${targetname1}
+        run_target ${targetname2}
+        run_target ${targetname3}
+        ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf 3 ./setup/setup_output/nodes_local_ip.txt 256 ${io_size} randwrite 3 1 1
+        shutdown_target ${targetname1}
+        shutdown_target ${targetname2}
+        shutdown_target ${targetname3}
+        mkdir -p ./setup/${run_output_dir}/without_log_rep_local_target_randwrite_io-size-${io_size}-reverse-three-different-io-target
+        ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 3 1 0 without_log_rep_local_target_randwrite_io-size-${io_size}-reverse-three-different-io-target ${hostname} ${targetname1} ${targetname2}
         io_size=`expr ${io_size} \* 2`
     done
 }
@@ -427,4 +627,20 @@ output_hostnames
 setup_all_nodes_fn
 echo "All nodes are successfully set!"
 
-performance_bottleneck_test
+configure_all_nodes_without_log
+
+performance_bottleneck_test_local_pcie
+
+performance_bottleneck_test_local_target
+
+performance_bottleneck_test_remote_target
+
+cofigure_all_nodes_wtih_log
+
+performance_rep_remote_target
+
+performance_rep_local_target
+
+performance_perf_three_different_io_target_remote
+
+performance_perf_three_different_io_target_local

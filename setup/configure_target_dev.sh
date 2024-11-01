@@ -41,7 +41,7 @@ function get_bdf() {
 }
 function run_nvmf_tgt() {
     # it needs more than 2 cores
-    ./build/bin/nvmf_tgt -m 0x3 &
+    ./build/bin/nvmf_tgt -m 0x3 &>/dev/null &
 }
 function create_transport() {
     ./scripts/rpc.py nvmf_create_transport -t RDMA -u 8192 -i 131072 -c 8192
@@ -79,7 +79,7 @@ function configure_target_dev() {
 	sleep 1s
     # 1. run nvmf_tgt and let it background running
 	run_nvmf_tgt
-    # sleep 1s
+    sleep 3s
 	# 2. create transport
 	create_transport
 	sleep 1s
@@ -116,7 +116,6 @@ function check_listening_status() {
         echo "Add listener succeeded. "
         echo "Configure Target succeeded. "
     fi
-    exit
 }
 function remove_listener() {
     ./scripts/rpc.py nvmf_subsystem_remove_listener ${subsys_nqn} -t rdma -a ${local_ip} -s 4420

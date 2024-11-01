@@ -95,7 +95,7 @@ fi
 if [[ -z "${host_status}" ]]; then
     host_status=0
 fi
-if [[ -z "${send_main_rep_finally}"]]; then
+if [[ -z "${send_main_rep_finally}" ]]; then
     send_main_rep_finally=0
 fi
 ### end check ######
@@ -122,9 +122,10 @@ function get_bdf() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./scripts/setup.sh status 2>&1 | grep NVMe | tail -n 1 | awk '{print $2}
+        ./scripts/setup.sh status 2>&1 | grep NVMe | tail -n 1 | awk '{print \$2}'
 ENDSSH
     )
+    bdf=`echo ${bdf} | awk '{print $NF}'`
 }
 
 # get local IP address
@@ -203,7 +204,7 @@ function set_params() {
     set_io_size
     set_workload
     set_run_time
-    set_send_main_rep_dinally
+    set_send_main_rep_finally
 }
 
 function run_perf() {
