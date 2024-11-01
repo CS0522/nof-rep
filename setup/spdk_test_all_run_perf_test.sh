@@ -211,7 +211,7 @@ function run_perf() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0x3 ${send_main_rep_finally} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
@@ -220,7 +220,7 @@ function run_perf_rep() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0x3 ${send_main_rep_finnally} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${send_main_rep_finally} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
