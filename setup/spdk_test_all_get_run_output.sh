@@ -91,6 +91,7 @@ host_spdk_dir="${workspace_dir}/spdk-${spdk_version}-host"
 target_spdk_dir="${workspace_dir}/spdk-${spdk_version}-target"
 # dir of local machine is Relative Path
 run_output_dir="run_output/${local_dir}"
+mkdir -p ./setup/${run_output_dir}
 
 # xxx_latency_log.csv
 # xxx_output.log
