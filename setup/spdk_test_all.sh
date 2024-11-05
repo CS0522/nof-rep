@@ -761,6 +761,9 @@ echo "All nodes are successfully set!"
 
 configure_all_nodes_without_log
 
+# 预热, 使盘进入 GC
+warm_up
+
 # 单盘的性能测试
 # test_single_remote_target
 
