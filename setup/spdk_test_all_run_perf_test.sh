@@ -140,23 +140,27 @@ ENDSSH
 function set_transport_ids() {
     local curr_node=0
     while (( ${curr_node}<${node_num} )); do
-        # if IP is host's IP, skip the loop
-        # if [[ "${local_ip}" == "${nodes_local_ip[${curr_node}]}" ]]; then
-        if [[ ${curr_node} -eq 0 ]] && [[ ${host_status} -eq 0 ]]; then
-            curr_node=`expr ${curr_node} + 1`
-            continue
-        else
-            if [[ ${curr_node} -eq 0 ]] && [[ ${host_status} -eq 2 ]]; then
+        # if IP is host's IP
+        if [[ ${curr_node} -eq 0 ]]; then
+            if [[ ${host_status} -eq 1 ]]; then
+                # 走本地环回, IP 为自身 IP (相当于走网卡) 
+                transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:${nodes_local_ip[${curr_node}]} trsvcid:4420'"
+            elif [[ ${host_status} -eq 2 ]]; then
+                # 走本地环回, IP 为 127.0.0.1
+                transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:127.0.0.1 trsvcid:4420'"
+            elif [[ ${host_status} -eq 3 ]]; then
+                # 走 PCIe
                 transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf}'"
-                curr_node=`expr ${curr_node} + 1`
-                continue
             fi
+            curr_node=$((curr_node + 1))
+            continue
         fi
         # target's IP
         transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:${nodes_local_ip[${curr_node}]} trsvcid:4420'"
 
         curr_node=`expr ${curr_node} + 1`
     done
+
     if [[ -z "${transport_ids}" ]]; then
         echo "transport_ids value is empty."
         exit
