@@ -15,12 +15,13 @@ function usage() {
     echo "is_100g:              100 Gbps or normal?"
 }
 ### check args ###
-if [ $# -ne 1 ]; then
+if [ $# -lt 1 ]; then
     usage
     exit
 fi
 ### end check ####
 is_100g=$1
+is_127_ip=$2
 function rebuild_target_spdk_with_latency_test() {
     # configure with rdma and target latency log
     ./configure --with-rdma --with-target-latency-log
@@ -28,6 +29,11 @@ function rebuild_target_spdk_with_latency_test() {
     # define TARGET_LATENCY_LOG
     make -j4
 }
+
+if [[ -z "${is_127_ip}" ]]; then
+    is_127_ip=0
+fi
+
 subsys_nqn="nqn.2016-06.io.spdk:cnode1"
 bdf=""
 nvme_ctrlr=""
@@ -104,7 +110,11 @@ function get_local_ip() {
 }
 function add_listener() {
     sleep 3s
-    ./scripts/rpc.py nvmf_subsystem_add_listener ${subsys_nqn} -t rdma -a ${local_ip} -s 4420
+    if [ ${is_127_ip} -eq 0 ]; then
+        ./scripts/rpc.py nvmf_subsystem_add_listener ${subsys_nqn} -t rdma -a ${local_ip} -s 4420
+    else
+        ./scripts/rpc.py nvmf_subsystem_add_listener ${subsys_nqn} -t rdma -a 127.0.0.1 -s 4420
+    fi
 }
 function check_listening_status() {
     curr_status=`./scripts/rpc.py nvmf_subsystem_get_listeners ${subsys_nqn}`
