@@ -79,11 +79,11 @@ void write_log_to_file(const char* module, struct timespec latency_time, uint32_
     if(!log_num){
 	    FILE* file = fopen(TARGET_LOG_FILE_PATH, "w+");
         fprintf(file, "id, modeule_name, latency_time.sec:latency_time.nsec, io_num, average_latency\n");
-	    fprintf(file, "%u,%s,%llu:%llu,%u\n", module, latency_time.tv_sec, latency_time.tv_nsec, io_num);
+	    fprintf(file, "%u,%s,%llu:%llu,%u\n", log_num / 3, module, latency_time.tv_sec, latency_time.tv_nsec, io_num);
 	    fclose(file);
     }else{
 	    FILE* file = fopen(TARGET_LOG_FILE_PATH, "a");
-	    fprintf(file, "%u,%s,%llu:%llu,%u\n", module, latency_time.tv_sec, latency_time.tv_nsec, io_num);
+	    fprintf(file, "%u,%s,%llu:%llu,%u\n", log_num / 3, module, latency_time.tv_sec, latency_time.tv_nsec, io_num);
 	    fclose(file);
     }
     log_num++;
