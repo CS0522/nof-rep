@@ -21,7 +21,8 @@ if [ $# -lt 1 ]; then
 fi
 ### end check ####
 is_100g=$1
-is_127_ip=$2
+is_127_ip=${2:-0}
+
 function rebuild_target_spdk_with_latency_test() {
     # configure with rdma and target latency log
     ./configure --with-rdma --with-target-latency-log
@@ -29,10 +30,6 @@ function rebuild_target_spdk_with_latency_test() {
     # define TARGET_LATENCY_LOG
     make -j4
 }
-
-if [[ -z "${is_127_ip}" ]]; then
-    is_127_ip=0
-fi
 
 subsys_nqn="nqn.2016-06.io.spdk:cnode1"
 bdf=""
