@@ -1,49 +1,9 @@
 #include "spdk/util.h"
-#include "spdk/thread.h"
 #ifdef TARGET_LATENCY_LOG
 
 pthread_mutex_t log_mutex;
 
 struct latency_module_log module_log;
-
-void latency_log_1s(union sigval sv){
-    pthread_mutex_lock(&log_mutex);
-    struct latency_module_log temp = module_log;
-    spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, &temp);
-    pthread_mutex_unlock(&log_mutex);
-}
-
-void init_log_fn(){
-    pthread_mutex_init(&log_mutex, NULL);
-
-    timer_t timerid;
-    struct sigevent sev;
-    struct itimerspec its;
-
-    sev.sigev_notify = SIGEV_THREAD;
-    sev.sigev_notify_function = latency_log_1s;
-    sev.sigev_notify_attributes = NULL;
-    sev.sigev_value.sival_ptr = &module_log;
-
-    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
-        perror("timer_create");
-        return 1;
-    }
-
-    its.it_value.tv_sec = 1;
-    its.it_value.tv_nsec = 0;
-    its.it_interval.tv_sec = 1;
-    its.it_interval.tv_nsec = 0;
-
-    if (timer_settime(timerid, 0, &its, NULL) == -1) {
-        perror("timer_settime");
-        return 1;
-    }
-}
-
-void fini_log_fn(){
-    pthread_mutex_destroy(&log_mutex);
-}
 
 int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b) {
     result->tv_sec = a->tv_sec - b->tv_sec;

@@ -40,12 +40,6 @@ extern struct latency_module_log module_log;
 
 extern pthread_mutex_t log_mutex;
 
-void latency_log_1s(union sigval sv);
-
-void init_log_fn();
-
-void fini_log_fn();
-
 int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b);
 
 void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
