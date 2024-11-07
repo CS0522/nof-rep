@@ -3,8 +3,6 @@
 #include"spdk/nvme.h"
 struct nvme_bdev_io {
 	#ifdef TARGET_LATENCY_LOG
-	struct timespec start_time_ssd;
-	struct timespec end_time_ssd;
 	struct timespec start_time;
 	#endif
 	/** array of iovecs to transfer. */

@@ -476,10 +476,6 @@ spdk_thread_lib_fini(void)
 	g_thread_op_supported_fn = NULL;
 	g_ctx_sz = 0;
 	if (g_app_thread != NULL) {
-		#ifdef TARGET_LATENCY_LOG
-		struct timespec temp;
-		write_log_to_file(0, NULL, temp, temp, true);
-		#endif
 		_free_thread(g_app_thread);
 		g_app_thread = NULL;
 	}

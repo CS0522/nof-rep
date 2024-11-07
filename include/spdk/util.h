@@ -16,7 +16,7 @@
 #include "spdk/stdinc.h"
 #include "spdk/queue.h"
 
-// #define TARGET_LATENCY_LOG
+#define TARGET_LATENCY_LOG
 #define APP_THREAD_EXCLUSIVE_REACTOR
 #define PERF_IO_WORKER_EXCLUSIVE_CORE
 
@@ -26,13 +26,31 @@
 #define TARGET_LOG_FILE_PATH "../output/target_latency_log.csv"
 
 struct latency_log_ctx{
-	uint32_t io_id;
-	const char* module;
-	struct timespec start_time;
-	struct timespec end_time;
+	struct timespec latency_time;
+	uint32_t io_num;
 };
 
-void write_log_to_file(uint32_t io_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish);
+struct latency_module_log{
+	struct latency_log_ctx target;
+	struct latency_log_ctx bdev;
+	struct latency_log_ctx driver;
+};
+
+extern struct latency_module_log module_log;
+
+extern pthread_mutex_t log_mutex;
+
+void latency_log_1s(union sigval sv);
+
+void init_log_fn();
+
+void fini_log_fn();
+
+int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b);
+
+void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
+
+void write_log_to_file(const char* module, struct timespec latency_time, uint32_t iops);
 
 void write_latency_log(void* ctx);
 #endif

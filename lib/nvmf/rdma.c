@@ -2439,12 +2439,13 @@ nvmf_rdma_request_process(struct spdk_nvmf_rdma_transport *rtransport,
 
 			rqpair->poller->stat.request_latency += spdk_get_ticks() - rdma_req->receive_tsc;
 			#ifdef TARGET_LATENCY_LOG
-			struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
-    		latency_log->io_id = rdma_req->io_id;
-    		latency_log->module = "target";
-    		latency_log->start_time = rdma_req->start_time;
-			clock_gettime(CLOCK_REALTIME, &latency_log->end_time);
-			spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, latency_log);
+			pthread_mutex_lock(&log_mutex);
+			struct timespec end_time;
+			struct timespec sub_time;
+			clock_gettime(CLOCK_REALTIME, &end_time);
+			timespec_sub(&sub_time, &end_time, &rdma_req->start_time);
+			timespec_add(&(module_log.target.latency_time), &(module_log.target.latency_time), &sub_time);
+			pthread_mutex_unlock(&log_mutex);
 			#endif
 			_nvmf_rdma_request_free(rdma_req, rtransport);
 			break;
@@ -3401,7 +3402,6 @@ nvmf_rdma_qpair_process_pending(struct spdk_nvmf_rdma_transport *rtransport,
 
 		rdma_req->receive_tsc = rdma_req->recv->receive_tsc;
 		#ifdef TARGET_LATENCY_LOG
-		rdma_req->io_id = rdma_req->recv->io_id;
 		clock_gettime(CLOCK_REALTIME, &rdma_req->start_time);
 		#endif
 		rdma_req->state = RDMA_REQUEST_STATE_NEW;
@@ -4699,9 +4699,6 @@ nvmf_rdma_poller_poll(struct spdk_nvmf_rdma_transport *rtransport,
 		case RDMA_WR_TYPE_RECV:
 			/* rdma_recv->qpair will be invalid if using an SRQ.  In that case we have to get the qpair from the wc. */
 			rdma_recv = SPDK_CONTAINEROF(rdma_wr, struct spdk_nvmf_rdma_recv, rdma_wr);
-			#ifdef TARGET_LATENCY_LOG
-			rdma_recv->io_id = wc[i].imm_data;
-			#endif
 			if (rpoller->srq != NULL) {
 				rdma_recv->qpair = get_rdma_qpair_from_wc(rpoller, &wc[i]);
 				/* It is possible that there are still some completions for destroyed QP

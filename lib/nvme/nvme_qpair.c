@@ -1026,16 +1026,6 @@ _nvme_qpair_submit_request(struct spdk_nvme_qpair *qpair, struct nvme_request *r
 		goto error;
 	}
 
-	#ifdef TARGET_LATENCY_LOG
-	if(req->parent == NULL){
-		struct nvme_bdev_io* bio = (struct nvme_bdev_io*)req->cb_arg;
-		if(bio->start_time_ssd.tv_nsec == 123){
-			clock_gettime(CLOCK_REALTIME, &req->start_time);
-			bio->start_time_ssd = req->start_time;
-		}
-	}
-	#endif
-
 	/* assign submit_tick before submitting req to specific transport */
 	if (spdk_unlikely(ctrlr->timeout_enabled)) {
 		if (req->submit_tick == 0) { /* req submitted for the first time */
