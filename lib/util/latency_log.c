@@ -98,6 +98,8 @@ void write_latency_log(void* ctx){
 static int g_print_first_create_time_flag = 1;
 static bool if_open = false;
 
+struct latency_ns_log* latency_log_namespaces;
+
 /**
  * @name: write_log_tasks_to_file
  * @msg: write latency log of tasks to file
@@ -105,52 +107,28 @@ static bool if_open = false;
  * @param {int} new_line: need to start a new line or not
  * @return {*}
  */
-void write_log_tasks_to_file(uint32_t io_id, int ns_id,
-                            struct timespec create_time, struct timespec submit_time,
-                            struct timespec complete_time, 
-                            int new_line)
-{
-    // myprint
-    // printf("进入 write_log_tasks_to_file\n");
 
-    FILE *file;
+void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue_latency, uint32_t complete_io_num, struct timespec complete_latency, int new_line){
+    static int num = 0;
+    FILE* file;
     if(!if_open){
         file = fopen(HOST_LOG_FILE_PATH, "w+");
     }else{
         file = fopen(HOST_LOG_FILE_PATH, "a");
     }
-    // 打开失败
-    if (!file)
-    {
+    if(!file){
         fprintf(stderr, "Failed to open %s\n", HOST_LOG_FILE_PATH);
-        // exit(EXIT_FAILURE);
         goto err;
     }
-
     if(!if_open){
         if_open = true;
-        printf("File %s is empty, write the title line\n", HOST_LOG_FILE_PATH);
-        fprintf(file, "io_id:ns_id,create_time,submit_time,complete_time\n");
+        printf("File %s is empry, write the title line\n", HOST_LOG_FILE_PATH);
+        fprintf(file, "id,ns_id,queue_latency.sec:queue_latency.nsec,queue_io_num,complete_latency.sec:complete_latency.nsec,complete_io_num\n");
     }
-    
-    //char ch = fgetc(file);
-    //printf("%c\n", ch);
-    // 空文件则添加 title
-    //if (ch == EOF)
-    //{
-    //    printf("File %s is empty, write the title line\n", HOST_LOG_FILE_PATH);
-    //    fprintf(file, "io_id:ns_id,create_time,submit_time,complete_time\n");
-    //}
-    // 写入记录数据
-    fprintf(file, "%u:%u,%llu:%llu,%llu:%llu,%llu:%llu", io_id, ns_id, 
-                                    create_time.tv_sec, create_time.tv_nsec, 
-                                    submit_time.tv_sec, submit_time.tv_nsec, 
-                                    complete_time.tv_sec, complete_time.tv_nsec);
-    fprintf(file, "\n");
-    // 如果该任务的 n 个副本打印结束，空一行或者做行标
-    if (new_line)
+    fprintf(file, "%d,%u,%llu:%llu,%u,%llu:%llu,%u\n", num / namespace_num, i, queue_latency.tv_sec, queue_latency.tv_sec, queue_io_num, complete_latency.tv_sec, complete_latency.tv_nsec, complete_io_num);
+    if(new_line){
         fprintf(file, "\n");
-
+    }
 err:
     fclose(file);
 }
@@ -204,36 +182,122 @@ int get_ns_index(char *name, char **g_ns_name, uint32_t g_ns_num)
  */
 void write_latency_tasks_log(void* ctx, char **g_ns_name, uint32_t g_rep_num, uint32_t g_ns_num)
 {
-    // myprint
-    // printf("进入 write_latency_tasks_log\n");
+    struct latency_ns_log* latency_log_namespaces = (struct latency_ns_log*)ctx;
 
-    struct latency_log_task_ctx *latency_log_tasks = (struct latency_log_task_ctx *)ctx;
-
-    // myprint
-    // printf("log_task to write: \n");
-    // for (int i = 0; i < 3; ++i)
-    // {
-    //     printf("*** log_task.io_id = %u ***\n", latency_log_tasks[i].io_id);
-    //     printf("    log_task.ns_id = %u\n", latency_log_tasks[i].ns_id);
-    //     printf("    log_task.create_time = %llu:%llu\n", latency_log_tasks[i].create_time.tv_sec, latency_log_tasks[i].create_time.tv_nsec);
-    //     printf("    log_task.submit_time = %llu:%llu\n", latency_log_tasks[i].submit_time.tv_sec, latency_log_tasks[i].submit_time.tv_nsec);
-    //     printf("    log_task.complete_time = %llu:%llu\n", latency_log_tasks[i].complete_time.tv_sec, latency_log_tasks[i].complete_time.tv_nsec);
-    // }
-    
-    uint32_t rep_cnt = 0;
-    for (; rep_cnt < g_rep_num; ++rep_cnt)
-    {
-        write_log_tasks_to_file(latency_log_tasks[rep_cnt].io_id, latency_log_tasks[rep_cnt].ns_id, 
-                                latency_log_tasks[rep_cnt].create_time, latency_log_tasks[rep_cnt].submit_time,
-                                latency_log_tasks[rep_cnt].complete_time,  
-                                (g_rep_num != 1 && (rep_cnt == (g_rep_num - 1))) ? 1 : 0);
+    for(int i = 0; i < namespace_num; i++){
+        write_log_tasks_to_file(i, latency_log_namespaces[i].queue_latency.io_num, latency_log_namespaces[i].queue_latency.latency_time,
+                                latency_log_namespaces[i].complete_latency.io_num, latency_log_namespaces[i].complete_latency.latency_time,
+                                (i == namespace_num - 1 ? 1 : 0));
     }
-    assert(rep_cnt == g_rep_num);
-
-    //if (g_rep_num != 1)
-        //g_print_first_create_time_flag = 0;
-
-    // 是 msg 中的静态数组，不用 free
-    // free((struct latency_log_task_ctx *)ctx);
+    free((struct latency_ns_log*)ctx);
 }
+
+/* 检查 msg queue 消息个数 */
+int check_msg_qnum(int msgid)
+{
+    struct msqid_ds msg_info;
+    int msg_cnt;
+
+    if (msgctl(msgid, IPC_STAT, &msg_info) == -1)
+    {
+        fprintf(stderr, "Failed to get msg queue info\n");
+        exit(EXIT_FAILURE);
+    }
+    msg_cnt = msg_info.msg_qnum;
+
+    return msg_cnt;
+}
+
+pthread_mutex_t log_mutex;
+uint32_t namespace_num;
+int msgid;
+
+void cleanup_log(){
+    for(int i = 0; i < namespace_num; i++){
+        latency_log_namespaces[i].complete_latency.io_num = latency_log_namespaces[i].queue_latency.io_num = 0;
+        latency_log_namespaces[i].complete_latency.latency_time.tv_sec = latency_log_namespaces[i].complete_latency.latency_time.tv_nsec = 0;
+        latency_log_namespaces[i].queue_latency.latency_time.tv_sec = latency_log_namespaces[i].queue_latency.latency_time.tv_nsec = 0;
+    }
+}
+
+void copy_latency_ns_log(struct latency_ns_log* temp){
+    for(int i = 0; i < namespace_num; i++){
+        temp[i] = latency_log_namespaces[i];
+    }
+}
+
+void latency_log_1s(union sigval sv){
+	pthread_mutex_lock(&log_mutex);
+	if(module_log.bdev.io_num != 0 || module_log.driver.io_num != 0 || module_log.target.io_num != 0){
+        struct latency_ns_log* temp = malloc(namespace_num * sizeof(struct latency_ns_log));
+        copy_latency_ns_log(temp);
+        msgsnd(msgid, temp, sizeof(namespace_num * sizeof(struct latency_ns_log)), 0);
+        cleanup_log();
+	}
+	pthread_mutex_unlock(&log_mutex); 
+}
+
+void init_log_fn(){
+    pthread_mutex_init(&log_mutex, NULL);
+
+    cleanup_log();
+
+    timer_t timerid;
+    struct sigevent sev;
+    struct itimerspec its;
+
+    sev.sigev_notify = SIGEV_THREAD;
+    sev.sigev_notify_function = latency_log_1s;
+    sev.sigev_notify_attributes = NULL;
+    sev.sigev_value.sival_ptr = latency_log_namespaces;
+
+    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
+        perror("timer_create");
+        return 1;
+    }
+
+    its.it_value.tv_sec = 1;
+    its.it_value.tv_nsec = 0;
+    its.it_interval.tv_sec = 1;
+    its.it_interval.tv_nsec = 0;
+
+    if (timer_settime(timerid, 0, &its, NULL) == -1) {
+        perror("timer_settime");
+        return 1;
+    }
+}
+
+void fini_log_fn(){
+    pthread_mutex_destroy(&log_mutex);
+}
+
+int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b) {
+    result->tv_sec = a->tv_sec - b->tv_sec;
+    result->tv_nsec = a->tv_nsec - b->tv_nsec;
+
+    // 如果纳秒部分小于零，需要借 1 秒
+    if (result->tv_nsec < 0) {
+        result->tv_sec -= 1;
+        result->tv_nsec += 1000000000;  // 纳秒值变为正数
+    }
+
+    // 如果秒数小于零，返回负数差值
+    if (result->tv_sec < 0) {
+        return -1;  // 返回负值表示 a 小于 b
+    }
+
+    return 0;  // 返回 0 表示 a >= b
+}
+
+void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b) {
+    result->tv_sec = a->tv_sec + b->tv_sec;
+    result->tv_nsec = a->tv_nsec + b->tv_nsec;
+
+    // 如果纳秒溢出，调整秒数和纳秒
+    if (result->tv_nsec >= 1000000000) {
+        result->tv_sec += 1;
+        result->tv_nsec -= 1000000000;
+    }
+}
+
 #endif

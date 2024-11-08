@@ -969,6 +969,14 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
     // 记录 task 提交时间
     // 如果被排队，task 本轮最后一次提交也会再次更新 submit_time
     clock_gettime(CLOCK_REALTIME, &task->submit_time);
+
+	pthread_mutex_lock(&log_mutex);
+	struct timespec sub_time;
+	timespec_sub(&sub_time, &task->submit_time, &task->create_time);
+	timespec_add(&(latency_log_namespaces[task->ns_id].queue_latency.latency_time), &(latency_log_namespaces[task->ns_id].queue_latency.latency_time), &sub_time);
+	latency_log_namespaces[task->ns_id].queue_latency.io_num++;
+	pthread_mutex_unlock(&log_mutex);
+
 #endif
 
     // myprint
@@ -1746,33 +1754,13 @@ task_complete(struct perf_task *task)
 
 	++g_io_completed_num;
 
-	/** 写日志 */
-	struct msg_buf send_msg;
-	send_msg.mtype = 1;
-	send_msg.latency_log_task.io_id = task->io_id;
-	send_msg.latency_log_task.ns_id = task->ns_id;
-    send_msg.latency_log_task.create_time = task->create_time;
-    send_msg.latency_log_task.submit_time = task->submit_time;
-    send_msg.latency_log_task.complete_time = task->complete_time;
+	pthread_mutex_lock(&log_mutex);
+	struct timespec sub_time;
+	timespec_sub(&sub_time, &task->complete_time, &task->submit_time);
+	timespec_add(&(latency_log_namespaces[task->ns_id].complete_latency.latency_time), &(latency_log_namespaces[task->ns_id].complete_latency.latency_time), &sub_time);
+	latency_log_namespaces[task->ns_id].complete_latency.io_num++;
+	pthread_mutex_unlock(&log_mutex);
 
-	// 发送 msg
-	// TODO 消息队列满如何处理？
-	if (msgsnd(g_msgid, &send_msg, sizeof(send_msg.latency_log_tasks), 0) == -1)
-	{
-		fprintf(stderr, "Failed to send msg to log writing process\n");
-		exit(EXIT_FAILURE);
-	}
-
-	// myprint
-	// printf("Message sent: \n");
-	// for (int i = 0; i < 3; ++i)
-	// {
-	//     printf(">>> log_task.io_id = %u >>>\n", send_msg.latency_log_tasks[i].io_id);
-	//     printf("    log_task.ns_id = %s\n", send_msg.latency_log_tasks[i].ns_id);
-	//     printf("    log_task.create_time = %llu:%llu\n", send_msg.latency_log_tasks[i].create_time.tv_sec, send_msg.latency_log_tasks[i].create_time.tv_nsec);
-	//     printf("    log_task.submit_time = %llu:%llu\n", send_msg.latency_log_tasks[i].submit_time.tv_sec, send_msg.latency_log_tasks[i].submit_time.tv_nsec);
-	//     printf("    log_task.complete_time = %llu:%llu\n", send_msg.latency_log_tasks[i].complete_time.tv_sec, send_msg.latency_log_tasks[i].complete_time.tv_nsec);
-	// }
 #endif
 
     // myprint
@@ -1840,7 +1828,7 @@ io_complete(void *ctx, const struct spdk_nvme_cpl *cpl)
 }
 
 static struct perf_task *
-allocate_main_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
+allocate_main_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id, uint32_t ns_id)
 {
 	struct perf_task *task;
 
@@ -1856,6 +1844,7 @@ allocate_main_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
 
     // 副本相关新添加逻辑
     task->io_id = io_id;
+	task->ns_id = ns_id;
     TAILQ_INIT(&task->rep_tasks);
     TAILQ_INSERT_TAIL(&task->rep_tasks, task, link);
     task->main_task = task;
@@ -1870,7 +1859,7 @@ allocate_main_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
 }
 
 static struct perf_task *
-copy_task(struct perf_task *main_task, struct ns_worker_ctx *ns_ctx)
+copy_task(struct perf_task *main_task, struct ns_worker_ctx *ns_ctx, uint32_t ns_id)
 {
     if (!main_task)
     {
@@ -1885,6 +1874,7 @@ copy_task(struct perf_task *main_task, struct ns_worker_ctx *ns_ctx)
     }
     // 使用副本的 ns
     task_copy->ns_ctx = ns_ctx;
+	task_copy->ns_id = ns_id;
     // 不复制 buf, 只复制 iovs 索引
     // 注意，理论上 iovs 也可以直接用 main_task 的，但是需要修改比较多的代码
     task_copy->iovcnt = main_task->iovcnt;
@@ -1924,6 +1914,7 @@ submit_io_rep(struct worker_thread *worker, int queue_depth)
     struct ns_worker_ctx *ns_ctx = NULL;
     struct perf_task *main_task = NULL;
     uint32_t io_id = 1;
+	uint32_t ns_id = 0;
 
     // [通过修改此处代码逻辑，来实现不同的入队顺序]
     // 先为每个 io 请求生成所有副本，再执行提交
@@ -1933,14 +1924,15 @@ submit_io_rep(struct worker_thread *worker, int queue_depth)
         bool is_main = true;
         TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
             if(is_main){
-                main_task = allocate_main_task(ns_ctx, queue_depth, io_id);
+                main_task = allocate_main_task(ns_ctx, queue_depth, io_id, ns_id);
 				if(g_send_main_rep_finally){
 					TAILQ_REMOVE(&main_task->rep_tasks, main_task, link);
 				}
                 is_main = false;
             } else {
-                copy_task(main_task, ns_ctx);
+                copy_task(main_task, ns_ctx, ns_id);
             }
+			ns_id++;
         }
 		if(g_send_main_rep_finally){
 			TAILQ_INSERT_TAIL(&main_task->rep_tasks, main_task, link);
@@ -3619,77 +3611,23 @@ setup_sig_handlers(void)
 }
 
 #ifdef PERF_LATENCY_LOG
-/* 封装写日志函数 */
-static void
-process_write_latency_log(struct latency_log_task_ctx *latency_log_tasks)
+static void process_write_latency_log(struct latency_ns_log* latency_log_namespaces)
 {
-    // myprint
-    // printf("进入 process_write_latency_log\n");
-
-    /* latency_log_tasks 中包含 n 个 log，是同一个 IO 的 n 个副本 */
-    
-    write_latency_tasks_log(latency_log_tasks, g_ns_name, g_rep_num, g_num_namespaces);
+    write_latency_tasks_log(latency_log_namespaces, g_ns_name, 1, g_num_namespaces);
 }
 
-/* 检查 msg queue 消息个数 */
-static int 
-check_msg_qnum(int msgid)
+void process_msg_recv(int msgid)
 {
-    struct msqid_ds msg_info;
-    int msg_cnt;
-
-    if (msgctl(msgid, IPC_STAT, &msg_info) == -1)
-    {
-        fprintf(stderr, "Failed to get msg queue info\n");
-        exit(EXIT_FAILURE);
-    }
-    msg_cnt = msg_info.msg_qnum;
-
-    return msg_cnt;
-}
-
-/* 处理消息队列 */
-static void
-process_msg_recv(int msgid)
-{
-    // 1. 获取消息队列信息
     int msg_cnt = check_msg_qnum(msgid);
-    // myprint
-    // if (msg_cnt)
-    //     printf("Msg queue num: %lu\n", msg_cnt);
-    
     while (msg_cnt-- > 0)
-    {   
-        struct msg_buf recv_msg;
-        // 2. 拉取消息
-        if (msgrcv(msgid, &recv_msg, sizeof(recv_msg.latency_log_tasks), 0, 0) == -1)
-        {
-            fprintf(stderr, "Failed to retrieve the messages\n");
-            exit(EXIT_FAILURE);
-        }
-            
-        // myprint
-        // printf("Message received: \n");
-        // for (int i = 0; i < 3; ++i)
-        // {
-        //     printf("<<< log_task.io_id = %u <<<\n", recv_msg.latency_log_tasks[i].io_id);
-        //     printf("    log_task.ns_id = %u\n", recv_msg.latency_log_tasks[i].ns_id);
-        //     printf("    log_task.create_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].create_time.tv_sec, recv_msg.latency_log_tasks[i].create_time.tv_nsec);
-        //     printf("    log_task.submit_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].submit_time.tv_sec, recv_msg.latency_log_tasks[i].submit_time.tv_nsec);
-        //     printf("    log_task.complete_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].complete_time.tv_sec, recv_msg.latency_log_tasks[i].complete_time.tv_nsec);
-        // }
-
-        // 3. 写日志
-        process_write_latency_log(recv_msg.latency_log_tasks);
+    {
+		struct latency_ns_log *latency_log_namespaces;
+		if(msgrev(msgid, latency_log_namespaces, sizeof(g_num_namespaces * sizeof(struct latency_ns_log)), 0, 0) == -1){
+			fprintf(stderr, "Failed to retieve the message\n");
+			exit(EXIT_FAILURE);
+		}
+		process_write_latency_log(latency_log_namespaces);
     }
-
-    // 4. 再次更新信息
-    // msg_cnt = check_msg_qnum(msgid);
-    // myprint
-    // if (msg_cnt)
-    //     printf("Msg queue num: %lu\n", msg_cnt);
-
-    return;
 }
 
 /* 子进程执行函数 */
@@ -3881,6 +3819,9 @@ main(int argc, char **argv)
 
     /* 创建消息队列 */
     g_msgid = msgget(IPC_PRIVATE, 0755);
+
+	msgid = g_msgid;
+
     if (g_msgid == -1)
     {
         fprintf(stderr, "Unable to create a msg queue\n");
@@ -3888,6 +3829,10 @@ main(int argc, char **argv)
     }
     // myprint
     printf("Create a msg queue with msgid %d. \n", g_msgid);
+
+	latency_log_namespaces = malloc(g_num_namespaces * sizeof(struct latency_ns_log));
+	namespace_num = g_num_namespaces;
+	init_log_fn();
 
     /* 创建子线程来写日志 */
     pthread_t log_thread_id = 0;
@@ -3968,6 +3913,7 @@ cleanup:
         exit(EXIT_FAILURE);
     }
     printf("Msg queue destroyed. \n");
+	fini_log_fn();
 #endif
 
 	spdk_env_fini();

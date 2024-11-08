@@ -20,7 +20,7 @@
 #define APP_THREAD_EXCLUSIVE_REACTOR
 #define PERF_IO_WORKER_EXCLUSIVE_CORE
 
-#define PERF_LATENCY_LOG
+//#define PERF_LATENCY_LOG
 
 #ifdef TARGET_LATENCY_LOG
 #define TARGET_LOG_FILE_PATH "../output/target_latency_log.csv"
@@ -56,34 +56,41 @@ void write_latency_log(void* ctx);
 #ifdef PERF_LATENCY_LOG
 #define HOST_LOG_FILE_PATH "../output/host_latency_log.csv"
 
-/* latency log context for perf task */
-struct latency_log_task_ctx
-{
-    uint32_t io_id;
-	uint32_t ns_id;
-    // the timestamp of creating entire task (may be queued after task creation)
-    struct timespec create_time;
-    // the timestamp of each Rep_task Submission
-    struct timespec submit_time;
-    // the timestamp of each Rep_task Completion
-    struct timespec complete_time;
+struct latency_log_ctx{
+	struct timespec latency_time;
+	uint32_t io_num;
 };
 
-struct msg_buf
-{
-    long mtype;
-    // msg 正文
-    struct latency_log_task_ctx latency_log_tasks;
+struct latency_ns_log{
+	struct latency_log_ctx queue_latency;
+	struct latency_log_ctx complete_latency;
 };
 
-/* For tasks. */
+extern struct latency_ns_log* latency_log_namespaces;
 
-void write_log_tasks_to_file(uint32_t io_id, int ns_id, 
-                            struct timespec create_time, struct timespec submit_time,
-                            struct timespec complete_time,
-							int new_line);
+void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue_latency, uint32_t complete_io_num, struct timespec complete_latency, int new_line);
 
 void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num, uint32_t g_ns_num);
+
+/* 检查 msg queue 消息个数 */
+int check_msg_qnum(int msgid);
+
+extern pthread_mutex_t log_mutex;
+
+extern uint32_t namespace_num;
+
+extern int msgid;
+
+void latency_log_1s(union sigval sv);
+
+void init_log_fn();
+
+void fini_log_fn();
+
+int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b);
+
+void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
+
 #endif
 
 #ifdef __cplusplus
