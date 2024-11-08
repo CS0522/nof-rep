@@ -1,0 +1,10 @@
+ut.o: ut.c /home/ice-cream/spdk/include/spdk/stdinc.h \
+ /home/ice-cream/spdk/include/spdk/util.h \
+ /home/ice-cream/spdk/include/spdk/queue.h \
+ /home/ice-cream/spdk/include/spdk/queue_extras.h \
+ /home/ice-cream/spdk/include/spdk_internal/cunit.h
+/home/ice-cream/spdk/include/spdk/stdinc.h:
+/home/ice-cream/spdk/include/spdk/util.h:
+/home/ice-cream/spdk/include/spdk/queue.h:
+/home/ice-cream/spdk/include/spdk/queue_extras.h:
+/home/ice-cream/spdk/include/spdk_internal/cunit.h:
