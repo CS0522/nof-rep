@@ -98,7 +98,7 @@ void write_latency_log(void* ctx){
 static int g_print_first_create_time_flag = 1;
 static bool if_open = false;
 
-struct latency_ns_log* latency_log_namespaces;
+struct latency_log_msg latency_msg;
 
 /**
  * @name: write_log_tasks_to_file
@@ -125,7 +125,7 @@ void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue
         printf("File %s is empry, write the title line\n", HOST_LOG_FILE_PATH);
         fprintf(file, "id,ns_id,queue_latency.sec:queue_latency.nsec,queue_io_num,complete_latency.sec:complete_latency.nsec,complete_io_num\n");
     }
-    fprintf(file, "%d,%u,%llu:%llu,%u,%llu:%llu,%u\n", num / namespace_num, i, queue_latency.tv_sec, queue_latency.tv_sec, queue_io_num, complete_latency.tv_sec, complete_latency.tv_nsec, complete_io_num);
+    fprintf(file, "%d,%u,%llu:%llu,%u,%llu:%llu,%u\n", num / namespace_num, i, queue_latency.tv_sec, queue_latency.tv_nsec, queue_io_num, complete_latency.tv_sec, complete_latency.tv_nsec, complete_io_num);
     if(new_line){
         fprintf(file, "\n");
     }
@@ -215,22 +215,22 @@ int msgid;
 
 void cleanup_log(){
     for(int i = 0; i < namespace_num; i++){
-        latency_log_namespaces[i].complete_latency.io_num = latency_log_namespaces[i].queue_latency.io_num = 0;
-        latency_log_namespaces[i].complete_latency.latency_time.tv_sec = latency_log_namespaces[i].complete_latency.latency_time.tv_nsec = 0;
-        latency_log_namespaces[i].queue_latency.latency_time.tv_sec = latency_log_namespaces[i].queue_latency.latency_time.tv_nsec = 0;
+        latency_msg.latency_log_namespaces[i].complete_latency.io_num = latency_msg.latency_log_namespaces[i].queue_latency.io_num = 0;
+        latency_msg.latency_log_namespaces[i].complete_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].complete_latency.latency_time.tv_nsec = 0;
+        latency_msg.latency_log_namespaces[i].queue_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].queue_latency.latency_time.tv_nsec = 0;
     }
 }
 
 void copy_latency_ns_log(struct latency_ns_log* temp){
     for(int i = 0; i < namespace_num; i++){
-        temp[i] = latency_log_namespaces[i];
+        temp[i] = latency_msg.latency_log_namespaces[i];
     }
 }
 
 bool is_io_num_not_empty(){
     bool return_judge = false;
     for(int i = 0; i < namespace_num; i++){
-        if(latency_log_namespaces[i].complete_latency.io_num != 0 || latency_log_namespaces[i].queue_latency.io_num != 0){
+        if(latency_msg.latency_log_namespaces[i].complete_latency.io_num != 0 || latency_msg.latency_log_namespaces[i].queue_latency.io_num != 0){
             return_judge = true;
             break;
         }
@@ -241,9 +241,12 @@ bool is_io_num_not_empty(){
 void latency_log_1s(union sigval sv){
 	pthread_mutex_lock(&log_mutex);
 	if(is_io_num_not_empty()){
+        struct latency_log_msg latency_msg;
+        latency_msg.mtype = 1;
         struct latency_ns_log* temp = malloc(namespace_num * sizeof(struct latency_ns_log));
+        latency_msg.latency_log_namespaces = temp;
         copy_latency_ns_log(temp);
-        msgsnd(msgid, temp, sizeof(namespace_num * sizeof(struct latency_ns_log)), 0);
+        msgsnd(msgid, &latency_msg, sizeof(namespace_num * sizeof(struct latency_ns_log)), 0);
         cleanup_log();
 	}
 	pthread_mutex_unlock(&log_mutex); 
@@ -261,7 +264,7 @@ void init_log_fn(){
     sev.sigev_notify = SIGEV_THREAD;
     sev.sigev_notify_function = latency_log_1s;
     sev.sigev_notify_attributes = NULL;
-    sev.sigev_value.sival_ptr = latency_log_namespaces;
+    sev.sigev_value.sival_ptr = latency_msg.latency_log_namespaces;
 
     if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
         perror("timer_create");

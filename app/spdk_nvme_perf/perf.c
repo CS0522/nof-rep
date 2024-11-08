@@ -944,8 +944,8 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 	pthread_mutex_lock(&log_mutex);
 	struct timespec sub_time;
 	timespec_sub(&sub_time, &task->submit_time, &task->create_time);
-	timespec_add(&(latency_log_namespaces[task->ns_id].queue_latency.latency_time), &(latency_log_namespaces[task->ns_id].queue_latency.latency_time), &sub_time);
-	latency_log_namespaces[task->ns_id].queue_latency.io_num++;
+	timespec_add(&(latency_msg.latency_log_namespaces[task->ns_id].queue_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].queue_latency.latency_time), &sub_time);
+	latency_msg.latency_log_namespaces[task->ns_id].queue_latency.io_num++;
 	pthread_mutex_unlock(&log_mutex);
 
 #endif
@@ -1627,8 +1627,8 @@ task_complete(struct perf_task *task)
 	pthread_mutex_lock(&log_mutex);
 	struct timespec sub_time;
 	timespec_sub(&sub_time, &task->complete_time, &task->submit_time);
-	timespec_add(&(latency_log_namespaces[task->ns_id].complete_latency.latency_time), &(latency_log_namespaces[task->ns_id].complete_latency.latency_time), &sub_time);
-	latency_log_namespaces[task->ns_id].complete_latency.io_num++;
+	timespec_add(&(latency_msg.latency_log_namespaces[task->ns_id].complete_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].complete_latency.latency_time), &sub_time);
+	latency_msg.latency_log_namespaces[task->ns_id].complete_latency.io_num++;
 	pthread_mutex_unlock(&log_mutex);
 
 #endif
@@ -3370,12 +3370,12 @@ void process_msg_recv(int msgid)
     int msg_cnt = check_msg_qnum(msgid);
     while (msg_cnt-- > 0)
     {
-		struct latency_ns_log *latency_log_namespaces;
-		if(msgrcv(msgid, latency_log_namespaces, sizeof(g_num_namespaces * sizeof(struct latency_ns_log)), 0, 0) == -1){
+		struct latency_log_msg latency_msg;
+		if(msgrcv(msgid, &latency_msg, sizeof(g_num_namespaces * sizeof(struct latency_ns_log)), 0, 0) == -1){
 			fprintf(stderr, "Failed to retieve the message\n");
 			exit(EXIT_FAILURE);
 		}
-		process_write_latency_log(latency_log_namespaces);
+		process_write_latency_log(latency_msg.latency_log_namespaces);
     }
 }
 
@@ -3575,7 +3575,7 @@ main(int argc, char **argv)
     // myprint
     printf("Create a msg queue with msgid %d. \n", g_msgid);
 
-	latency_log_namespaces = malloc(g_num_namespaces * sizeof(struct latency_ns_log));
+	latency_msg.latency_log_namespaces = malloc(g_num_namespaces * sizeof(struct latency_ns_log));
 	namespace_num = g_num_namespaces;
 	init_log_fn();
 

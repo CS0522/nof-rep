@@ -66,7 +66,12 @@ struct latency_ns_log{
 	struct latency_log_ctx complete_latency;
 };
 
-extern struct latency_ns_log* latency_log_namespaces;
+struct latency_log_msg{
+	long mtype;
+	struct latency_ns_log* latency_log_namespaces;
+};
+
+extern struct latency_log_msg latency_msg;
 
 void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue_latency, uint32_t complete_io_num, struct timespec complete_latency, int new_line);
 
