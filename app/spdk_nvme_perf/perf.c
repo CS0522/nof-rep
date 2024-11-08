@@ -191,29 +191,18 @@ struct perf_task {
 
 #ifdef PERF_LATENCY_LOG
     uint32_t io_id;
-    // int is_main_task;
+	uint32_t ns_id;
     /* for recording timestamps */
-    // submit_time - create_time = queued_time
+    // queued_time - create_time = queued_time
+	// task_complete_time   = complete_time - submit_time
     // 创建完全副本 task 的时间（将设置完 offset 和 rw 看作一个完全 task；创建完 task 后可能需要排队）
     struct timespec create_time;
     // 提交副本 task 的时间（提交 task 并要发送 nvme 请求的时间）
     struct timespec submit_time;
     // 该副本 task 结束的时间
     struct timespec complete_time;
-
-    /* 用于记录复制副本的开销: first_create_time(rep) - first_create_time(main) */
-    struct timespec first_create_time;
 #endif
 };
-
-#ifdef PERF_LATENCY_LOG
-struct msg_buf
-{
-    long mtype;
-    // msg 正文
-    struct latency_log_task_ctx latency_log_task;
-};
-#endif
 
 struct worker_thread {
 	TAILQ_HEAD(, ns_worker_ctx)	ns_ctx;
@@ -951,61 +940,8 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
     // 记录 task 提交时间
     // 如果被排队，task 本轮最后一次提交也会再次更新 submit_time
     clock_gettime(CLOCK_REALTIME, &task->submit_time);
-
-	if (task->is_read) {
-		if (task->iovcnt == 1) {
-			return spdk_nvme_ns_cmd_read_with_md_io_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
-							     task->iovs[0].iov_base, task->md_iov.iov_base,
-							     lba,
-							     entry->io_size_blocks, io_complete,
-							     task, task->io_id, entry->io_flags,
-							     task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
-		} else {
-			return spdk_nvme_ns_cmd_readv_with_md_io_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
-							      lba, entry->io_size_blocks,
-							      io_complete, task, task->io_id, entry->io_flags,
-							      nvme_perf_reset_sgl, nvme_perf_next_sge,
-							      task->md_iov.iov_base,
-							      task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
-		}
-	} else {
-		switch (mode) {
-		case DIF_MODE_DIF:
-			rc = spdk_dif_generate(task->iovs, task->iovcnt, entry->io_size_blocks, &task->dif_ctx);
-			if (rc != 0) {
-				fprintf(stderr, "Generation of DIF failed\n");
-				return rc;
-			}
-			break;
-		case DIF_MODE_DIX:
-			rc = spdk_dix_generate(task->iovs, task->iovcnt, &task->md_iov, entry->io_size_blocks,
-					       &task->dif_ctx);
-			if (rc != 0) {
-				fprintf(stderr, "Generation of DIX failed\n");
-				return rc;
-			}
-			break;
-		default:
-			break;
-		}
-
-		if (task->iovcnt == 1) {
-			return spdk_nvme_ns_cmd_write_with_md_io_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
-							      task->iovs[0].iov_base, task->md_iov.iov_base,
-							      lba,
-							      entry->io_size_blocks, io_complete,
-							      task, task->io_id, entry->io_flags,
-							      task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
-		} else {
-			return spdk_nvme_ns_cmd_writev_with_md_io_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
-							       lba, entry->io_size_blocks,
-							       io_complete, task, task->io_id, entry->io_flags,
-							       nvme_perf_reset_sgl, nvme_perf_next_sge,
-							       task->md_iov.iov_base,
-							       task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
-		}
-	}
 #else
+
     if (task->is_read) {
 		if (task->iovcnt == 1) {
 			return spdk_nvme_ns_cmd_read_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
@@ -1685,13 +1621,10 @@ task_complete(struct perf_task *task)
     struct msg_buf send_msg;
     send_msg.mtype = 1;
     send_msg.latency_log_task.io_id = task->io_id;
-    send_msg.latency_log_task.is_main_task = 1;
-    strcpy(send_msg.latency_log_task.ns_entry_name, task->ns_ctx->entry->name);
+	send_msg.latency_log_task.ns_id = task->ns_id;
     send_msg.latency_log_task.create_time = task->create_time;
     send_msg.latency_log_task.submit_time = task->submit_time;
     send_msg.latency_log_task.complete_time = task->complete_time;
-    send_msg.latency_log_task.all_complete_time = task->complete_time;
-    send_msg.latency_log_task.first_create_time = task->first_create_time;
         
     // 发送 msg
     // TODO 消息队列满如何处理？
@@ -1706,13 +1639,11 @@ task_complete(struct perf_task *task)
     // for (int i = 0; i < 3; ++i)
     // {
     //     printf(">>> log_task.io_id = %u >>>\n", send_msg.latency_log_tasks[i].io_id);
-    //     printf("    log_task.is_main_task = %d\n", send_msg.latency_log_tasks[i].is_main_task);
-    //     printf("    log_task.ns_entry_name = %s\n", send_msg.latency_log_tasks[i].ns_entry_name);
+    //     printf("    log_task.ns_id = %u\n", send_msg.latency_log_tasks[i].ns_id);
     //     printf("    log_task.create_time = %llu:%llu\n", send_msg.latency_log_tasks[i].create_time.tv_sec, send_msg.latency_log_tasks[i].create_time.tv_nsec);
     //     printf("    log_task.submit_time = %llu:%llu\n", send_msg.latency_log_tasks[i].submit_time.tv_sec, send_msg.latency_log_tasks[i].submit_time.tv_nsec);
     //     printf("    log_task.complete_time = %llu:%llu\n", send_msg.latency_log_tasks[i].complete_time.tv_sec, send_msg.latency_log_tasks[i].complete_time.tv_nsec);
-    //     printf("    log_task.all_complete_time = %llu:%llu\n\n", send_msg.latency_log_tasks[i].all_complete_time.tv_sec, send_msg.latency_log_tasks[i].all_complete_time.tv_nsec);
-    // }
+	// }
 #endif
 
 	/*
@@ -1778,12 +1709,6 @@ allocate_task(struct ns_worker_ctx *ns_ctx, int queue_depth, uint32_t io_id)
 	ns_ctx->entry->fn_table->setup_payload(task, queue_depth % 8 + 1);
 
 	task->ns_ctx = ns_ctx;
-
-#ifdef PERF_LATENCY_LOG
-    task->io_id = io_id;
-
-    clock_gettime(CLOCK_REALTIME, &task->first_create_time);
-#endif
 
 	return task;
 }
@@ -3498,12 +3423,10 @@ process_msg_recv(int msgid)
         // for (int i = 0; i < 3; ++i)
         // {
         //     printf("<<< log_task.io_id = %u <<<\n", recv_msg.latency_log_tasks[i].io_id);
-        //     printf("    log_task.is_main_task = %d\n", recv_msg.latency_log_tasks[i].is_main_task);
-        //     printf("    log_task.ns_entry_name = %s\n", recv_msg.latency_log_tasks[i].ns_entry_name);
+        //     printf("    log_task.ns_id = %u\n", recv_msg.latency_log_tasks[i].ns_id);
         //     printf("    log_task.create_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].create_time.tv_sec, recv_msg.latency_log_tasks[i].create_time.tv_nsec);
         //     printf("    log_task.submit_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].submit_time.tv_sec, recv_msg.latency_log_tasks[i].submit_time.tv_nsec);
         //     printf("    log_task.complete_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].complete_time.tv_sec, recv_msg.latency_log_tasks[i].complete_time.tv_nsec);
-        //     printf("    log_task.all_complete_time = %llu:%llu\n\n", recv_msg.latency_log_tasks[i].all_complete_time.tv_sec, recv_msg.latency_log_tasks[i].all_complete_time.tv_nsec);
         // }
 
         // 3. 写日志

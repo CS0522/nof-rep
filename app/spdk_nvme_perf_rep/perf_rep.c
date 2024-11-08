@@ -175,12 +175,10 @@ struct ns_worker_ctx {
 };
  
 struct perf_task {
-    /*
-     * io_id 记录 IO 序号（也即 perf_task 序号，当 IO Size <= 4GB 时，一次 perf_task 只有一个 IO）
-     * IO 序号理论上应该按顺序赋值。
-     * 但是由于会并发的下发 g_queue_depth 个 perf_task，为了方便管理，每个 perf_task 完成之后直接令 io_id += g_queue_depth。
-     */
+	// io_id 记录 IO 序号（也即 perf_task 序号，当 IO Size <= 4GB 时，一次 perf_task 只有一个 IO）
     uint32_t io_id;
+	uint32_t ns_id;
+	
 	struct ns_worker_ctx	*ns_ctx;
 	struct iovec		*iovs; /* array of iovecs to transfer. */
 	int			iovcnt; /* Number of iovecs in iovs array. */
@@ -204,10 +202,8 @@ struct perf_task {
      * 实现中的细节：
      * 1. 由于只有一个线程管理所有副本，不需要上锁
      * 2. 所有的副本间可以互相感知，通过一个 rep_tasks 队列来实现
-     * 3. TAILQ 原始设计不支持指针共享，考虑仅让主副本维护 rep_tasks，然后所有从副本可以感知到主副本；而不是将 TAILQ 改为支持共享
-     * 4. 同样的，rep_completed_num 也只由 main_task 维护唯一变量
+     * 3. TAILQ 原始设计不支持指针共享，仅让主副本维护 rep_tasks，然后所有从副本可以感知到主副本
      */
-	int is_main_task;
     struct perf_task *main_task;
     TAILQ_HEAD(, perf_task)	rep_tasks;
     uint32_t rep_completed_num;
@@ -215,7 +211,7 @@ struct perf_task {
 #ifdef PERF_LATENCY_LOG
     /* for recording timestamps */
     // queued_time = submit_time - create_time
-	// task_time   = complete_time - submit_time
+	// task_complete_time   = complete_time - submit_time
     // 创建完全副本 task 的时间（将设置完 offset 和 rw 看作一个完全 task；创建完 task 后可能需要排队）
     struct timespec create_time;
     // 提交副本 task 的时间（提交 task 并要发送 nvme 请求的时间）
@@ -224,17 +220,6 @@ struct perf_task {
     struct timespec complete_time;
 #endif
 };
-
-#ifdef PERF_LATENCY_LOG
-struct msg_buf
-{
-    long mtype;
-    // msg 正文
-    // 测试发现这里可能只能保存在栈内存上
-    // TODO 数量变化的时候如何处理
-    struct latency_log_task_ctx latency_log_tasks[3];
-};
-#endif
 
 struct worker_thread {
 	TAILQ_HEAD(, ns_worker_ctx)	ns_ctx;
@@ -1758,6 +1743,36 @@ task_complete(struct perf_task *task)
 #ifdef PERF_LATENCY_LOG
     // 记录每个副本 task 结束的时间
     clock_gettime(CLOCK_REALTIME, &task->complete_time);
+
+	++g_io_completed_num;
+
+	/** 写日志 */
+	struct msg_buf send_msg;
+	send_msg.mtype = 1;
+	send_msg.latency_log_task.io_id = task->io_id;
+	send_msg.latency_log_task.ns_id = task->ns_id;
+    send_msg.latency_log_task.create_time = task->create_time;
+    send_msg.latency_log_task.submit_time = task->submit_time;
+    send_msg.latency_log_task.complete_time = task->complete_time;
+
+	// 发送 msg
+	// TODO 消息队列满如何处理？
+	if (msgsnd(g_msgid, &send_msg, sizeof(send_msg.latency_log_tasks), 0) == -1)
+	{
+		fprintf(stderr, "Failed to send msg to log writing process\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// myprint
+	// printf("Message sent: \n");
+	// for (int i = 0; i < 3; ++i)
+	// {
+	//     printf(">>> log_task.io_id = %u >>>\n", send_msg.latency_log_tasks[i].io_id);
+	//     printf("    log_task.ns_id = %s\n", send_msg.latency_log_tasks[i].ns_id);
+	//     printf("    log_task.create_time = %llu:%llu\n", send_msg.latency_log_tasks[i].create_time.tv_sec, send_msg.latency_log_tasks[i].create_time.tv_nsec);
+	//     printf("    log_task.submit_time = %llu:%llu\n", send_msg.latency_log_tasks[i].submit_time.tv_sec, send_msg.latency_log_tasks[i].submit_time.tv_nsec);
+	//     printf("    log_task.complete_time = %llu:%llu\n", send_msg.latency_log_tasks[i].complete_time.tv_sec, send_msg.latency_log_tasks[i].complete_time.tv_nsec);
+	// }
 #endif
 
     // myprint
@@ -1776,54 +1791,6 @@ task_complete(struct perf_task *task)
     } else { // 本轮任务完成
         // myprint
         // printf("*** IO 任务完毕 io_id = %u ***\n", main_task->io_id);
-
-#ifdef PERF_LATENCY_LOG
-        ++g_io_completed_num;
-        // 获取统一的 IO 任务完成时间
-        struct timespec all_complete_time;
-        clock_gettime(CLOCK_REALTIME, &all_complete_time);
-
-        /** 写日志 */
-        // 1. 构建关于 latency_log_task_ctx 的数组，维护副本的关联关系。即一个数组中 n 个副本同属于一个 IO
-        struct msg_buf send_msg;
-        send_msg.mtype = 1;
-        // 2. 遍历每个 rep_tasks，加入到数组中
-        int rep_cnt = 0;
-        TAILQ_FOREACH(t_task, &main_task->rep_tasks, link)
-        {
-            send_msg.latency_log_tasks[rep_cnt].io_id = t_task->io_id;
-            send_msg.latency_log_tasks[rep_cnt].is_main_task = t_task->is_main_task;
-            strcpy(send_msg.latency_log_tasks[rep_cnt].ns_entry_name, t_task->ns_ctx->entry->name);
-            send_msg.latency_log_tasks[rep_cnt].create_time = t_task->create_time;
-            send_msg.latency_log_tasks[rep_cnt].submit_time = t_task->submit_time;
-            send_msg.latency_log_tasks[rep_cnt].complete_time = t_task->complete_time;
-            send_msg.latency_log_tasks[rep_cnt].all_complete_time = all_complete_time;
-
-            ++rep_cnt;
-        }
-        assert(rep_cnt == g_rep_num);
-        // 3. 发送 msg
-        // TODO 消息队列满如何处理？
-        if (msgsnd(g_msgid, &send_msg, sizeof(send_msg.latency_log_tasks), 0) == -1)
-        {
-            fprintf(stderr, "Failed to send msg to log writing process\n");
-            exit(EXIT_FAILURE);
-        }
-
-        // myprint
-        // printf("Message sent: \n");
-        // for (int i = 0; i < 3; ++i)
-        // {
-        //     printf(">>> log_task.io_id = %u >>>\n", send_msg.latency_log_tasks[i].io_id);
-        //     printf("    log_task.is_main_task = %d\n", send_msg.latency_log_tasks[i].is_main_task);
-        //     printf("    log_task.ns_entry_name = %s\n", send_msg.latency_log_tasks[i].ns_entry_name);
-        //     printf("    log_task.create_time = %llu:%llu\n", send_msg.latency_log_tasks[i].create_time.tv_sec, send_msg.latency_log_tasks[i].create_time.tv_nsec);
-        //     printf("    log_task.submit_time = %llu:%llu\n", send_msg.latency_log_tasks[i].submit_time.tv_sec, send_msg.latency_log_tasks[i].submit_time.tv_nsec);
-        //     printf("    log_task.complete_time = %llu:%llu\n", send_msg.latency_log_tasks[i].complete_time.tv_sec, send_msg.latency_log_tasks[i].complete_time.tv_nsec);
-        //     printf("    log_task.all_complete_time = %llu:%llu\n\n", send_msg.latency_log_tasks[i].all_complete_time.tv_sec, send_msg.latency_log_tasks[i].all_complete_time.tv_nsec);
-        // }
-#endif
-
         main_task->rep_completed_num = 0;
 		uint32_t io_id = main_task->io_id + g_queue_depth;
 		// 令 IO 操作的 io_id 不为 0
@@ -1893,7 +1860,6 @@ allocate_main_task(struct ns_worker_ctx *ns_ctx, int queue_depth, int io_id)
     TAILQ_INSERT_TAIL(&task->rep_tasks, task, link);
     task->main_task = task;
     task->rep_completed_num = 0;
-    task->is_main_task = 1;
 
     // myprint
     // printf("*** 创建 IO 任务 task->io_id = %u ***\n", task->io_id);
@@ -1928,7 +1894,6 @@ copy_task(struct perf_task *main_task, struct ns_worker_ctx *ns_ctx)
     task_copy->io_id = main_task->io_id;
     // 主副本变量指向 main_task
     task_copy->main_task = main_task;
-    task_copy->is_main_task = 0;
     // 插入到副本队列中
     TAILQ_INSERT_TAIL(&main_task->rep_tasks, task_copy, link);
 
@@ -3708,12 +3673,10 @@ process_msg_recv(int msgid)
         // for (int i = 0; i < 3; ++i)
         // {
         //     printf("<<< log_task.io_id = %u <<<\n", recv_msg.latency_log_tasks[i].io_id);
-        //     printf("    log_task.is_main_task = %d\n", recv_msg.latency_log_tasks[i].is_main_task);
-        //     printf("    log_task.ns_entry_name = %s\n", recv_msg.latency_log_tasks[i].ns_entry_name);
+        //     printf("    log_task.ns_id = %u\n", recv_msg.latency_log_tasks[i].ns_id);
         //     printf("    log_task.create_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].create_time.tv_sec, recv_msg.latency_log_tasks[i].create_time.tv_nsec);
         //     printf("    log_task.submit_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].submit_time.tv_sec, recv_msg.latency_log_tasks[i].submit_time.tv_nsec);
         //     printf("    log_task.complete_time = %llu:%llu\n", recv_msg.latency_log_tasks[i].complete_time.tv_sec, recv_msg.latency_log_tasks[i].complete_time.tv_nsec);
-        //     printf("    log_task.all_complete_time = %llu:%llu\n\n", recv_msg.latency_log_tasks[i].all_complete_time.tv_sec, recv_msg.latency_log_tasks[i].all_complete_time.tv_nsec);
         // }
 
         // 3. 写日志

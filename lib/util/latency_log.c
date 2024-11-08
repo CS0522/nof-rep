@@ -94,6 +94,14 @@ void write_latency_log(void* ctx){
 #endif
 
 #ifdef PERF_LATENCY_LOG
+
+struct msg_buf
+{
+    long mtype;
+    // msg 正文
+    struct latency_log_task_ctx latency_log_tasks;
+};
+
 static int g_print_first_create_time_flag = 1;
 static bool if_open = false;
 
@@ -104,10 +112,9 @@ static bool if_open = false;
  * @param {int} new_line: need to start a new line or not
  * @return {*}
  */
-void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task, 
+void write_log_tasks_to_file(uint32_t io_id, int ns_id,
                             struct timespec create_time, struct timespec submit_time,
-                            struct timespec complete_time, struct timespec all_complete_time,
-                            struct timespec first_create_time, 
+                            struct timespec complete_time, 
                             int new_line)
 {
     // myprint
@@ -130,7 +137,7 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task,
     if(!if_open){
         if_open = true;
         printf("File %s is empty, write the title line\n", HOST_LOG_FILE_PATH);
-        fprintf(file, "io_id:ns_index,is_main_task,create_time,submit_time,complete_time,all_complete_time,first_create_time\n");
+        fprintf(file, "io_id:ns_id,create_time,submit_time,complete_time\n");
     }
     
     //char ch = fgetc(file);
@@ -139,16 +146,13 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task,
     //if (ch == EOF)
     //{
     //    printf("File %s is empty, write the title line\n", HOST_LOG_FILE_PATH);
-    //    fprintf(file, "io_id:ns_index,is_main_task,create_time,submit_time,complete_time,all_complete_time,first_create_time\n");
+    //    fprintf(file, "io_id:ns_id,create_time,submit_time,complete_time\n");
     //}
     // 写入记录数据
-    fprintf(file, "%u:%d,%d,%llu:%llu,%llu:%llu,%llu:%llu,%llu:%llu", io_id, ns_index, is_main_task,
+    fprintf(file, "%u:%u,%llu:%llu,%llu:%llu,%llu:%llu", io_id, ns_id, 
                                     create_time.tv_sec, create_time.tv_nsec, 
                                     submit_time.tv_sec, submit_time.tv_nsec, 
-                                    complete_time.tv_sec, complete_time.tv_nsec, 
-                                    all_complete_time.tv_sec, all_complete_time.tv_nsec);
-    if (g_print_first_create_time_flag)
-        fprintf(file, ",%llu:%llu", first_create_time.tv_sec, first_create_time.tv_nsec);
+                                    complete_time.tv_sec, complete_time.tv_nsec;
     fprintf(file, "\n");
     // 如果该任务的 n 个副本打印结束，空一行或者做行标
     if (new_line)
@@ -217,22 +221,18 @@ void write_latency_tasks_log(void* ctx, char **g_ns_name, uint32_t g_rep_num, ui
     // for (int i = 0; i < 3; ++i)
     // {
     //     printf("*** log_task.io_id = %u ***\n", latency_log_tasks[i].io_id);
-    //     printf("    log_task.is_main_task = %d\n", latency_log_tasks[i].is_main_task);
-    //     printf("    log_task.ns_entry_name = %s\n", latency_log_tasks[i].ns_entry_name);
+    //     printf("    log_task.ns_id = %u\n", latency_log_tasks[i].ns_id);
     //     printf("    log_task.create_time = %llu:%llu\n", latency_log_tasks[i].create_time.tv_sec, latency_log_tasks[i].create_time.tv_nsec);
     //     printf("    log_task.submit_time = %llu:%llu\n", latency_log_tasks[i].submit_time.tv_sec, latency_log_tasks[i].submit_time.tv_nsec);
     //     printf("    log_task.complete_time = %llu:%llu\n", latency_log_tasks[i].complete_time.tv_sec, latency_log_tasks[i].complete_time.tv_nsec);
-    //     printf("    log_task.all_complete_time = %llu:%llu\n\n", latency_log_tasks[i].all_complete_time.tv_sec, latency_log_tasks[i].all_complete_time.tv_nsec);
     // }
     
     uint32_t rep_cnt = 0;
     for (; rep_cnt < g_rep_num; ++rep_cnt)
     {
-        write_log_tasks_to_file(latency_log_tasks[rep_cnt].io_id, get_ns_index(latency_log_tasks[rep_cnt].ns_entry_name, g_ns_name, g_ns_num), 
-                                latency_log_tasks[rep_cnt].is_main_task,
+        write_log_tasks_to_file(latency_log_tasks[rep_cnt].io_id, latency_log_tasks[rep_cnt].ns_id, 
                                 latency_log_tasks[rep_cnt].create_time, latency_log_tasks[rep_cnt].submit_time,
-                                latency_log_tasks[rep_cnt].complete_time, latency_log_tasks[rep_cnt].all_complete_time, 
-                                latency_log_tasks[rep_cnt].first_create_time, 
+                                latency_log_tasks[rep_cnt].complete_time,  
                                 (g_rep_num != 1 && (rep_cnt == (g_rep_num - 1))) ? 1 : 0);
     }
     assert(rep_cnt == g_rep_num);
