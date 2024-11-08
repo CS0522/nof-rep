@@ -809,6 +809,7 @@ __bdev_nvme_io_complete(struct spdk_bdev_io *bdev_io, enum spdk_bdev_io_status s
 	clock_gettime(CLOCK_REALTIME, &end_time);
 	timespec_sub(&sub_time, &end_time, &nbdev_io->start_time);
 	timespec_add(&(module_log.driver.latency_time), &(module_log.driver.latency_time), &sub_time);
+	module_log.driver.io_num++;
 	pthread_mutex_unlock(&log_mutex);
 	#endif
 	if (cpl) {

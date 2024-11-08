@@ -5,6 +5,8 @@ pthread_mutex_t log_mutex;
 
 struct latency_module_log module_log;
 
+bool is_io_log = false;
+
 int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b) {
     result->tv_sec = a->tv_sec - b->tv_sec;
     result->tv_nsec = a->tv_nsec - b->tv_nsec;

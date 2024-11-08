@@ -2445,6 +2445,7 @@ nvmf_rdma_request_process(struct spdk_nvmf_rdma_transport *rtransport,
 			clock_gettime(CLOCK_REALTIME, &end_time);
 			timespec_sub(&sub_time, &end_time, &rdma_req->start_time);
 			timespec_add(&(module_log.target.latency_time), &(module_log.target.latency_time), &sub_time);
+			module_log.target.io_num++;
 			pthread_mutex_unlock(&log_mutex);
 			#endif
 			_nvmf_rdma_request_free(rdma_req, rtransport);

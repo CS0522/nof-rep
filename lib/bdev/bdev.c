@@ -7265,6 +7265,7 @@ bdev_io_complete(void *ctx)
 	clock_gettime(CLOCK_REALTIME, &end_time);
 	timespec_sub(&sub_time, &end_time, &bdev_io->start_time);
 	timespec_add(&(module_log.bdev.latency_time), &(module_log.bdev.latency_time), &sub_time);
+	module_log.bdev.io_num++;
     pthread_mutex_unlock(&log_mutex);
 	#endif
 

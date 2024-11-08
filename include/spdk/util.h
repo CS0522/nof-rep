@@ -40,6 +40,8 @@ extern struct latency_module_log module_log;
 
 extern pthread_mutex_t log_mutex;
 
+extern bool is_io_log;
+
 int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b);
 
 void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);

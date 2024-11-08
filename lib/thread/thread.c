@@ -3113,14 +3113,31 @@ spdk_spin_held(struct spdk_spinlock *sspin)
 
 #ifdef TARGET_LATENCY_LOG
 void latency_log_1s(union sigval sv){
-    pthread_mutex_lock(&log_mutex);
-    struct latency_module_log temp = module_log;
-    spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, &temp);
-    pthread_mutex_unlock(&log_mutex);
+	pthread_mutex_lock(&log_mutex);
+	if(module_log.bdev.io_num != 0 || module_log.driver.io_num != 0 || module_log.target.io_num != 0){
+		struct latency_module_log* temp = malloc(sizeof(struct latency_module_log));
+		temp->bdev.io_num = module_log.bdev.io_num;
+		temp->driver.io_num = module_log.driver.io_num;
+		temp->target.io_num = module_log.target.io_num;
+		temp->bdev.latency_time = module_log.bdev.latency_time;
+		temp->driver.latency_time = module_log.driver.latency_time;
+		temp->target.latency_time = module_log.target.latency_time;
+		module_log.bdev.io_num = module_log.driver.io_num = module_log.target.io_num = 0;
+		module_log.bdev.latency_time.tv_sec = module_log.bdev.latency_time.tv_nsec = 0;
+		module_log.driver.latency_time.tv_sec = module_log.driver.latency_time.tv_nsec = 0;
+		module_log.target.latency_time.tv_sec = module_log.target.latency_time.tv_nsec = 0;
+		spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, temp);
+	}
+	pthread_mutex_unlock(&log_mutex); 
 }
 
 void init_log_fn(){
     pthread_mutex_init(&log_mutex, NULL);
+
+	module_log.bdev.io_num = module_log.driver.io_num = module_log.target.io_num = 0;
+	module_log.bdev.latency_time.tv_sec = module_log.bdev.latency_time.tv_nsec = 0;
+	module_log.driver.latency_time.tv_sec = module_log.driver.latency_time.tv_nsec = 0;
+	module_log.target.latency_time.tv_sec = module_log.target.latency_time.tv_nsec = 0;
 
     timer_t timerid;
     struct sigevent sev;
