@@ -940,7 +940,7 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
     // 记录 task 提交时间
     // 如果被排队，task 本轮最后一次提交也会再次更新 submit_time
     clock_gettime(CLOCK_REALTIME, &task->submit_time);
-#else
+#endif
 
     if (task->is_read) {
 		if (task->iovcnt == 1) {
@@ -995,7 +995,6 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 							       task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
 		}
 	}
-#endif
 }
 
 static void
