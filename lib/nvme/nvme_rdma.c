@@ -2357,9 +2357,6 @@ nvme_rdma_qpair_submit_request(struct spdk_nvme_qpair *qpair,
 	wr->next = NULL;
 	nvme_rdma_trace_ibv_sge(wr->sg_list);
 
-    // 用 wr->imm_data 字段记录 req->io_id
-    wr->imm_data = req->io_id;
-
     // myprint
     // printf("提交请求 io_id = %u, req->cmd.cid = %u, rdma_req->id = %u, wr_id = %#X\n", 
     //             req->io_id, req->cmd.cid, rdma_req->id, rdma_req->send_wr.wr_id);
