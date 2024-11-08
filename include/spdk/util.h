@@ -16,7 +16,7 @@
 #include "spdk/stdinc.h"
 #include "spdk/queue.h"
 
-#define TARGET_LATENCY_LOG
+//#define TARGET_LATENCY_LOG
 #define APP_THREAD_EXCLUSIVE_REACTOR
 #define PERF_IO_WORKER_EXCLUSIVE_CORE
 
@@ -45,6 +45,8 @@ extern bool is_io_log;
 int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b);
 
 void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
+
+int timespec_divide(struct timespec *ts, int num);
 
 void write_log_to_file(const char* module, struct timespec latency_time, uint32_t iops);
 
