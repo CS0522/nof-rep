@@ -3371,7 +3371,7 @@ void process_msg_recv(int msgid)
     while (msg_cnt-- > 0)
     {
 		struct latency_ns_log *latency_log_namespaces;
-		if(msgrev(msgid, latency_log_namespaces, sizeof(g_num_namespaces * sizeof(struct latency_ns_log)), 0, 0) == -1){
+		if(msgrcv(msgid, latency_log_namespaces, sizeof(g_num_namespaces * sizeof(struct latency_ns_log)), 0, 0) == -1){
 			fprintf(stderr, "Failed to retieve the message\n");
 			exit(EXIT_FAILURE);
 		}
