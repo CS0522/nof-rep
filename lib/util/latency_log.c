@@ -226,9 +226,20 @@ void copy_latency_ns_log(struct latency_ns_log* temp){
     }
 }
 
+bool is_io_num_not_empty(){
+    bool return_judge = false;
+    for(int i = 0; i < namespace_num; i++){
+        if(latency_log_namespaces[i].complete_latency.io_num != 0 || latency_log_namespaces[i].queue_latency.io_num != 0){
+            return_judge = true;
+            break;
+        }
+    }
+    return return_judge;
+}
+
 void latency_log_1s(union sigval sv){
 	pthread_mutex_lock(&log_mutex);
-	if(module_log.bdev.io_num != 0 || module_log.driver.io_num != 0 || module_log.target.io_num != 0){
+	if(is_io_num_not_empty()){
         struct latency_ns_log* temp = malloc(namespace_num * sizeof(struct latency_ns_log));
         copy_latency_ns_log(temp);
         msgsnd(msgid, temp, sizeof(namespace_num * sizeof(struct latency_ns_log)), 0);
