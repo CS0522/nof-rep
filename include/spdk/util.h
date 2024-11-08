@@ -46,6 +46,8 @@ int timespec_sub(struct timespec *result, const struct timespec *a, const struct
 
 void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
 
+int timespec_divide(struct timespec *ts, int num);
+
 void write_log_to_file(const char* module, struct timespec latency_time, uint32_t iops);
 
 void write_latency_log(void* ctx);
