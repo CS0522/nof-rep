@@ -123,9 +123,13 @@ void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue
     if(!if_open){
         if_open = true;
         printf("File %s is empry, write the title line\n", HOST_LOG_FILE_PATH);
-        fprintf(file, "id,ns_id,queue_latency.sec:queue_latency.nsec,queue_io_num,complete_latency.sec:complete_latency.nsec,complete_io_num\n");
+        fprintf(file, "id,ns_id,queue_latency.sec:queue_latency.nsec,queue_io_num,average_queue_latency.sec:average_queue_latency.nsec,complete_latency.sec:complete_latency.nsec,complete_io_num,average_complete_latency.sec:complete_complete_latency.nsec\n");
     }
-    fprintf(file, "%d,%u,%llu:%llu,%u,%llu:%llu,%u\n", num / namespace_num, i, queue_latency.tv_sec, queue_latency.tv_nsec, queue_io_num, complete_latency.tv_sec, complete_latency.tv_nsec, complete_io_num);
+    struct timespec average_queue_latency = queue_latency;
+    timespec_divide(&average_queue_latency, queue_io_num);
+    struct timespec average_complete_latency = complete_latency;
+    timespec_divide(&average_complete_latency, complete_io_num);
+    fprintf(file, "%d,%u,%llu:%llu,%u,%llu:%llu,%llu:%llu,%u,%llu:%llu\n", num / namespace_num, i, queue_latency.tv_sec, queue_latency.tv_nsec, queue_io_num, average_queue_latency.tv_sec, average_queue_latency.tv_nsec, complete_latency.tv_sec, complete_latency.tv_nsec, complete_io_num, average_complete_latency.tv_sec, average_complete_latency.tv_nsec);
     if(new_line){
         fprintf(file, "\n");
     }
@@ -313,6 +317,35 @@ void timespec_add(struct timespec *result, const struct timespec *a, const struc
         result->tv_sec += 1;
         result->tv_nsec -= 1000000000;
     }
+}
+
+int timespec_divide(struct timespec *ts, int num) {
+    if (num <= 0) {
+        // 无效的除数
+        return -1;
+    }
+
+    // 先处理秒部分
+    long sec_result = ts->tv_sec / num;
+    long sec_remainder = ts->tv_sec % num;
+
+    // 处理纳秒部分
+    long nsec_result = ts->tv_nsec / num;
+    long nsec_remainder = ts->tv_nsec % num;
+
+    // 将剩余的秒部分（余数）转化为纳秒并加到纳秒部分
+    long remainder_nsec_as_sec = sec_remainder * 1000000000L + nsec_remainder;
+    nsec_result += remainder_nsec_as_sec / num;
+
+    // 将可能的纳秒溢出部分加到秒
+    sec_result += nsec_result / 1000000000L;
+    nsec_result %= 1000000000L; // 保证纳秒部分小于1秒
+
+    // 更新结果
+    ts->tv_sec = sec_result;
+    ts->tv_nsec = nsec_result;
+
+    return 0; // 成功
 }
 
 #endif

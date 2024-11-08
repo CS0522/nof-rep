@@ -96,6 +96,8 @@ int timespec_sub(struct timespec *result, const struct timespec *a, const struct
 
 void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
 
+int timespec_divide(struct timespec *ts, int num);
+
 #endif
 
 #ifdef __cplusplus
