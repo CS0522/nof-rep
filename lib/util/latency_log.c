@@ -129,6 +129,7 @@ void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue
     if(new_line){
         fprintf(file, "\n");
     }
+    num++;
 err:
     fclose(file);
 }
