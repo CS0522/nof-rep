@@ -95,13 +95,6 @@ void write_latency_log(void* ctx){
 
 #ifdef PERF_LATENCY_LOG
 
-struct msg_buf
-{
-    long mtype;
-    // msg 正文
-    struct latency_log_task_ctx latency_log_tasks;
-};
-
 static int g_print_first_create_time_flag = 1;
 static bool if_open = false;
 
@@ -152,7 +145,7 @@ void write_log_tasks_to_file(uint32_t io_id, int ns_id,
     fprintf(file, "%u:%u,%llu:%llu,%llu:%llu,%llu:%llu", io_id, ns_id, 
                                     create_time.tv_sec, create_time.tv_nsec, 
                                     submit_time.tv_sec, submit_time.tv_nsec, 
-                                    complete_time.tv_sec, complete_time.tv_nsec;
+                                    complete_time.tv_sec, complete_time.tv_nsec);
     fprintf(file, "\n");
     // 如果该任务的 n 个副本打印结束，空一行或者做行标
     if (new_line)
