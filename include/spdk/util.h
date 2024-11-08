@@ -22,7 +22,7 @@
 
 // #define PERF_LATENCY_LOG
 
-#ifdef TARGET_LATENCY_LOG
+//#ifdef TARGET_LATENCY_LOG
 #define TARGET_LOG_FILE_PATH "../output/target_latency_log.csv"
 
 struct latency_log_ctx{
