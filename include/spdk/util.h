@@ -73,9 +73,6 @@ struct latency_log_task_ctx
     struct timespec complete_time;
     // the timestamp of each IO Completion
     struct timespec all_complete_time;
-    // the timestamp of the creation each Rep_task,
-    // only used for the first time to record duplication cost
-    struct timespec first_create_time;
 };
 
 /* For tasks. */
