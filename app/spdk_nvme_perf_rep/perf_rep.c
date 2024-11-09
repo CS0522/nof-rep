@@ -994,19 +994,37 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 
 	if (task->is_read) {
 		if (task->iovcnt == 1) {
+			#ifdef PERF_LATENCY_LOG
+			return return spdk_nvme_ns_cmd_read_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+							     task->iovs[0].iov_base, task->md_iov.iov_base,
+							     lba,
+							     entry->io_size_blocks, io_complete,
+							     task, task->ns_id, entry->io_flags,
+							     task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
+			#else
 			return spdk_nvme_ns_cmd_read_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							     task->iovs[0].iov_base, task->md_iov.iov_base,
 							     lba,
 							     entry->io_size_blocks, io_complete,
 							     task, entry->io_flags,
 							     task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
+			#endif
 		} else {
+			#ifdef PERF_LATENCY_LOG
+			return return spdk_nvme_ns_cmd_readv_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+							     task->iovs[0].iov_base, task->md_iov.iov_base,
+							     lba,
+							     entry->io_size_blocks, io_complete,
+							     task, task->ns_id, entry->io_flags,
+							     task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
+			#else
 			return spdk_nvme_ns_cmd_readv_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							      lba, entry->io_size_blocks,
 							      io_complete, task, entry->io_flags,
 							      nvme_perf_reset_sgl, nvme_perf_next_sge,
 							      task->md_iov.iov_base,
 							      task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
+			#endif
 		}
 	} else {
         // 不进入
@@ -1031,19 +1049,37 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 		}
 
 		if (task->iovcnt == 1) {
+			#ifdef PERF_LATENCY_LOG
+			return return spdk_nvme_ns_cmd_write_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+							     task->iovs[0].iov_base, task->md_iov.iov_base,
+							     lba,
+							     entry->io_size_blocks, io_complete,
+							     task, task->ns_id, entry->io_flags,
+							     task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
+			#else
 			return spdk_nvme_ns_cmd_write_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							      task->iovs[0].iov_base, task->md_iov.iov_base,
 							      lba,
 							      entry->io_size_blocks, io_complete,
 							      task, entry->io_flags,
 							      task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
+			#endif
 		} else {
+			#ifdef PERF_LATENCY_LOG
+			return return spdk_nvme_ns_cmd_write_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+							     task->iovs[0].iov_base, task->md_iov.iov_base,
+							     lba,
+							     entry->io_size_blocks, io_complete,
+							     task, task->ns_id, entry->io_flags,
+							     task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
+			#else
 			return spdk_nvme_ns_cmd_writev_with_md(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							       lba, entry->io_size_blocks,
 							       io_complete, task, entry->io_flags,
 							       nvme_perf_reset_sgl, nvme_perf_next_sge,
 							       task->md_iov.iov_base,
 							       task->dif_ctx.apptag_mask, task->dif_ctx.app_tag);
+			#endif
 		}
 	}
 }

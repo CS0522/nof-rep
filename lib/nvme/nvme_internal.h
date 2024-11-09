@@ -276,8 +276,6 @@ struct nvme_request {
 	#ifdef TARGET_LATENCY_LOG
 	struct timespec start_time;
 	#endif
-    // 添加一个保存 io id 的字段
-    uint32_t io_id;
 
 	uint8_t				retries;
 
@@ -320,6 +318,23 @@ struct nvme_request {
 	STAILQ_ENTRY(nvme_request)	stailq;
 
 	struct spdk_nvme_qpair		*qpair;
+
+	#ifdef PERF_LATENCY_LOG
+	// 统计性能涉及 id
+    uint32_t io_id;
+	uint32_t ns_id;
+	// 统计性能涉及计算时间
+	// 提交 nvme req 的时间
+    struct timespec req_submit_time;
+	// 完成 nvme req 的时间
+	struct timespec req_complete_time;
+	// 提交 wr 的时间
+	struct timespec wr_send_time;
+	// 提交 wr 完成的时间
+	struct timespec wr_send_complete_time;
+    // wr 完成的时间
+    struct timespec wr_recv_time;
+	#endif
 
 	/*
 	 * The value of spdk_get_ticks() when the request was submitted to the hardware.
