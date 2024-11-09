@@ -1497,6 +1497,35 @@ nvme_complete_request(spdk_nvme_cmd_cb cb_fn, void *cb_arg, struct spdk_nvme_qpa
 		}
 	}
 
+	#ifdef PERF_LATENCY_LOG
+	clock_gettime(CLOCK_REALTIME, &req->req_complete_time);
+
+	pthread_mutex_lock(&log_mutex);
+	struct timespec sub_time;
+
+	// req_send_latency = wr_send_time - req_submit_time
+	timespec_sub(&sub_time, &req->wr_send_time, &req->req_submit_time);
+	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].req_send_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].req_send_latency.latency_time), &sub_time);
+	latency_msg.latency_log_namespaces[req->ns_id].req_send_latency.io_num++;
+
+	// req_complete_latency = req_complete_time - req_submit_time
+	timespec_sub(&sub_time, &req->req_complete_time, &req->req_submit_time);
+	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].req_complete_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].req_complete_latency.latency_time), &sub_time);
+	latency_msg.latency_log_namespaces[req->ns_id].req_complete_latency.io_num++;
+
+	// wr_send_latency = wr_send_complete_time - wr_send_time
+	timespec_sub(&sub_time, &req->wr_send_complete_time, &req->wr_send_time);
+	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].wr_send_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].wr_send_latency.latency_time), &sub_time);
+	latency_msg.latency_log_namespaces[req->ns_id].wr_send_latency.io_num++;
+
+	// wr_complete_latency = wr_recv_time - wr_send_time
+	timespec_sub(&sub_time, &req->wr_recv_time, &req->wr_send_time);
+	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].wr_complete_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].wr_complete_latency.latency_time), &sub_time);
+	latency_msg.latency_log_namespaces[req->ns_id].wr_complete_latency.io_num++;
+
+	pthread_mutex_unlock(&log_mutex);
+	#endif
+
 	/* For PCIe completions, we want to avoid touching the req itself to avoid
 	 * dependencies on loading those cachelines. So call the internal helper
 	 * function instead using the qpair that was passed by the caller, instead

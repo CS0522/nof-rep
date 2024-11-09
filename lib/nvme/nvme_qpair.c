@@ -1035,6 +1035,10 @@ _nvme_qpair_submit_request(struct spdk_nvme_qpair *qpair, struct nvme_request *r
 	} else {
 		req->submit_tick = 0;
 	}
+
+	#ifdef PERF_LATENCY_LOG
+	clock_gettime(CLOCK_REALTIME, &req->req_submit_time);
+	#endif
  
 	/* Allow two cases:
 	 * 1. NVMe qpair is enabled.

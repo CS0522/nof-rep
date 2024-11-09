@@ -2576,6 +2576,11 @@ nvme_rdma_process_recv_completion(struct nvme_rdma_poller *poller, struct ibv_wc
     // printf("接收完毕 rdma_rsp->cp.cid = %u -> rdma_req->id = %u, rdma_req->send_wr.wr_id = %#X, io_id = send_wr->imm_data = %u\n", 
     //             rdma_rsp->cpl.cid, rdma_req->id, rdma_req->send_wr.wr_id, rdma_req->send_wr.imm_data);
 
+	#ifdef PERF_LATENCY_LOG
+	struct nvme_request *req = rdma_req->req;
+	clock_gettime(CLOCK_REALTIME, &req->wr_recv_time);
+	#endif
+
 	if ((rdma_req->completion_flags & NVME_RDMA_SEND_COMPLETED) == 0) {
 		return 0;
 	}
@@ -2655,6 +2660,11 @@ nvme_rdma_process_send_completion(struct nvme_rdma_poller *poller,
 	rdma_req->completion_flags |= NVME_RDMA_SEND_COMPLETED;
 	assert(rqpair->current_num_sends > 0);
 	rqpair->current_num_sends--;
+
+	#ifdef PERF_LATENCY_LOG
+	struct nvme_req *req = rdma_req->req;
+	clock_gettime(CLOCK_REALTIME, &req->wr_send_complete_time);
+	#endif
 
     // myprint
     // printf("发送完毕 rdma_req->id = %u, rdma_req->send_wr->wr_id = %#X, io_id = send_wr->imm_data = %u\n", 

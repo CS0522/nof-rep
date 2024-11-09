@@ -66,6 +66,7 @@ struct latency_ns_log{
 	struct latency_log_ctx task_complete_latency;
 	struct latency_log_ctx req_send_latency;
 	struct latency_log_ctx req_complete_latency;
+	struct latency_log_ctx wr_send_latency;
 	struct latency_log_ctx wr_complete_latency;
 };
 
