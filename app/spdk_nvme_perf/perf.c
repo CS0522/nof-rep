@@ -1708,7 +1708,9 @@ submit_io(struct ns_worker_ctx *ns_ctx, int queue_depth, uint32_t ns_id)
 
 	while (queue_depth-- > 0) {
 		task = allocate_task(ns_ctx, queue_depth, io_id++);
+#ifdef PERF_LATENCY_LOG
 		task->ns_id = ns_id;
+#endif
 		submit_single_io(task);
 	}
 }
