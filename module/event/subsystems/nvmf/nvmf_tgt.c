@@ -12,6 +12,7 @@
 #include "spdk/nvme.h"
 #include "spdk/nvmf_cmd.h"
 #include "spdk_internal/usdt.h"
+#include "spdk/util.h"
 
 enum nvmf_tgt_state {
 	NVMF_TGT_INIT_NONE = 0,
@@ -500,6 +501,9 @@ nvmf_tgt_advance_state(void)
 			break;
 		}
 		case NVMF_TGT_RUNNING:
+			#ifdef TARGET_LATENCY_LOG
+			init_log_fn();
+			#endif
 			spdk_subsystem_init_next(0);
 			break;
 		case NVMF_TGT_FINI_STOP_LISTEN:
@@ -521,6 +525,9 @@ nvmf_tgt_advance_state(void)
 			break;
 		}
 		case NVMF_TGT_FINI_DESTROY_SUBSYSTEMS:
+			#ifdef TARGET_LATENCY_LOG
+			fini_log_fn();
+			#endif
 			_nvmf_tgt_subsystem_destroy(NULL);
 			/* Function above can be asynchronous, it will call nvmf_tgt_advance_state() once done.
 			 * So just return here */
