@@ -973,8 +973,8 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 	pthread_mutex_lock(&log_mutex);
 	struct timespec sub_time;
 	timespec_sub(&sub_time, &task->submit_time, &task->create_time);
-	timespec_add(&(latency_msg.latency_log_namespaces[task->ns_id].queue_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].queue_latency.latency_time), &sub_time);
-	latency_msg.latency_log_namespaces[task->ns_id].queue_latency.io_num++;
+	timespec_add(&(latency_msg.latency_log_namespaces[task->ns_id].task_queue_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].task_queue_latency.latency_time), &sub_time);
+	latency_msg.latency_log_namespaces[task->ns_id].task_queue_latency.io_num++;
 	pthread_mutex_unlock(&log_mutex);
 
 #endif
@@ -995,7 +995,7 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 	if (task->is_read) {
 		if (task->iovcnt == 1) {
 			#ifdef PERF_LATENCY_LOG
-			return return spdk_nvme_ns_cmd_read_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+			return spdk_nvme_ns_cmd_read_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							     task->iovs[0].iov_base, task->md_iov.iov_base,
 							     lba,
 							     entry->io_size_blocks, io_complete,
@@ -1011,7 +1011,7 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 			#endif
 		} else {
 			#ifdef PERF_LATENCY_LOG
-			return return spdk_nvme_ns_cmd_readv_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+			return spdk_nvme_ns_cmd_readv_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							     task->iovs[0].iov_base, task->md_iov.iov_base,
 							     lba,
 							     entry->io_size_blocks, io_complete,
@@ -1050,7 +1050,7 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 
 		if (task->iovcnt == 1) {
 			#ifdef PERF_LATENCY_LOG
-			return return spdk_nvme_ns_cmd_write_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+			return spdk_nvme_ns_cmd_write_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							     task->iovs[0].iov_base, task->md_iov.iov_base,
 							     lba,
 							     entry->io_size_blocks, io_complete,
@@ -1066,7 +1066,7 @@ nvme_submit_io(struct perf_task *task, struct ns_worker_ctx *ns_ctx,
 			#endif
 		} else {
 			#ifdef PERF_LATENCY_LOG
-			return return spdk_nvme_ns_cmd_write_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
+			return spdk_nvme_ns_cmd_write_with_md_ns_id(entry->u.nvme.ns, ns_ctx->u.nvme.qpair[qp_num],
 							     task->iovs[0].iov_base, task->md_iov.iov_base,
 							     lba,
 							     entry->io_size_blocks, io_complete,
@@ -1793,8 +1793,8 @@ task_complete(struct perf_task *task)
 	pthread_mutex_lock(&log_mutex);
 	struct timespec sub_time;
 	timespec_sub(&sub_time, &task->complete_time, &task->submit_time);
-	timespec_add(&(latency_msg.latency_log_namespaces[task->ns_id].complete_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].complete_latency.latency_time), &sub_time);
-	latency_msg.latency_log_namespaces[task->ns_id].complete_latency.io_num++;
+	timespec_add(&(latency_msg.latency_log_namespaces[task->ns_id].task_complete_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].task_complete_latency.latency_time), &sub_time);
+	latency_msg.latency_log_namespaces[task->ns_id].task_complete_latency.io_num++;
 	pthread_mutex_unlock(&log_mutex);
 
 #endif

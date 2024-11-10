@@ -100,6 +100,12 @@ static bool if_open = false;
 
 struct latency_log_msg latency_msg;
 
+void fprint_log(FILE* file, int i, int num, char* name, struct timespec latency, uint32_t io_num){
+    struct timespec average_latency = latency;
+    timespec_divide(&average_latency, io_num);
+    fprintf(file, "%d,%u,%s,%llu:%llu,%u,%llu:%llu\n", num / namespace_num, i, name, latency.tv_sec, latency.tv_nsec, io_num, average_latency.tv_sec, average_latency.tv_nsec);
+}
+
 /**
  * @name: write_log_tasks_to_file
  * @msg: write latency log of tasks to file
@@ -108,7 +114,10 @@ struct latency_log_msg latency_msg;
  * @return {*}
  */
 
-void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue_latency, uint32_t complete_io_num, struct timespec complete_latency, int new_line){
+void write_log_tasks_to_file(int i, uint32_t task_queue_io_num, struct timespec task_queue_latency, uint32_t task_complete_io_num, struct timespec task_complete_latency,
+							uint32_t req_send_io_num, struct timespec req_send_latency, uint32_t req_complete_io_num, struct timespec req_complete_latency,
+							uint32_t wr_send_io_num, struct timespec wr_send_latency, uint32_t wr_complete_io_num, struct timespec wr_complete_latency,
+							int new_line){
     static int num = 0;
     FILE* file;
     if(!if_open){
@@ -123,13 +132,14 @@ void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue
     if(!if_open){
         if_open = true;
         printf("File %s is empry, write the title line\n", HOST_LOG_FILE_PATH);
-        fprintf(file, "id,ns_id,queue_latency.sec:queue_latency.nsec,queue_io_num,average_queue_latency.sec:average_queue_latency.nsec,complete_latency.sec:complete_latency.nsec,complete_io_num,average_complete_latency.sec:complete_complete_latency.nsec\n");
+        fprintf(file, "id,ns_id,name,latency.sec:latency.nsec,io_num,average_latency.sec:average_latency.nsec\n");
     }
-    struct timespec average_queue_latency = queue_latency;
-    timespec_divide(&average_queue_latency, queue_io_num);
-    struct timespec average_complete_latency = complete_latency;
-    timespec_divide(&average_complete_latency, complete_io_num);
-    fprintf(file, "%d,%u,%llu:%llu,%u,%llu:%llu,%llu:%llu,%u,%llu:%llu\n", num / namespace_num, i, queue_latency.tv_sec, queue_latency.tv_nsec, queue_io_num, average_queue_latency.tv_sec, average_queue_latency.tv_nsec, complete_latency.tv_sec, complete_latency.tv_nsec, complete_io_num, average_complete_latency.tv_sec, average_complete_latency.tv_nsec);
+    fprint_log(file, i, num, "task_queue", task_queue_latency, task_queue_io_num);
+    fprint_log(file, i, num, "task_complete", task_complete_latency, task_complete_io_num);
+    fprint_log(file, i, num, "req_send", req_send_latency, req_send_io_num);
+    fprint_log(file, i, num, "req_complete", req_complete_latency, req_complete_io_num);
+    fprint_log(file, i, num, "wr_send", wr_send_latency, wr_complete_io_num);
+    fprint_log(file, i, num, "wr_complete", wr_complete_latency, wr_complete_io_num);
     if(new_line){
         fprintf(file, "\n");
     }
@@ -190,8 +200,12 @@ void write_latency_tasks_log(void* ctx, char **g_ns_name, uint32_t g_rep_num, ui
     struct latency_ns_log* latency_log_namespaces = (struct latency_ns_log*)ctx;
 
     for(int i = 0; i < namespace_num; i++){
-        write_log_tasks_to_file(i, latency_log_namespaces[i].queue_latency.io_num, latency_log_namespaces[i].queue_latency.latency_time,
-                                latency_log_namespaces[i].complete_latency.io_num, latency_log_namespaces[i].complete_latency.latency_time,
+        write_log_tasks_to_file(i, latency_log_namespaces[i].task_queue_latency.io_num, latency_log_namespaces[i].task_queue_latency.latency_time,
+                                latency_log_namespaces[i].task_complete_latency.io_num, latency_log_namespaces[i].task_complete_latency.latency_time,
+                                latency_log_namespaces[i].req_send_latency.io_num, latency_log_namespaces[i].req_send_latency.latency_time,
+                                latency_log_namespaces[i].req_complete_latency.io_num, latency_log_namespaces[i].req_complete_latency.latency_time,
+                                latency_log_namespaces[i].wr_send_latency.io_num, latency_log_namespaces[i].wr_send_latency.latency_time,
+                                latency_log_namespaces[i].wr_complete_latency.io_num, latency_log_namespaces[i].wr_complete_latency.latency_time,
                                 (i == namespace_num - 1 ? 1 : 0));
     }
     free((struct latency_ns_log*)ctx);
@@ -219,9 +233,15 @@ int msgid;
 
 void cleanup_log(){
     for(int i = 0; i < namespace_num; i++){
-        latency_msg.latency_log_namespaces[i].complete_latency.io_num = latency_msg.latency_log_namespaces[i].queue_latency.io_num = 0;
-        latency_msg.latency_log_namespaces[i].complete_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].complete_latency.latency_time.tv_nsec = 0;
-        latency_msg.latency_log_namespaces[i].queue_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].queue_latency.latency_time.tv_nsec = 0;
+        latency_msg.latency_log_namespaces[i].task_complete_latency.io_num = latency_msg.latency_log_namespaces[i].task_queue_latency.io_num = 0;
+        latency_msg.latency_log_namespaces[i].task_complete_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].task_complete_latency.latency_time.tv_nsec = 0;
+        latency_msg.latency_log_namespaces[i].task_queue_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].task_queue_latency.latency_time.tv_nsec = 0;
+        latency_msg.latency_log_namespaces[i].req_send_latency.io_num = latency_msg.latency_log_namespaces[i].req_complete_latency.io_num = 0;
+        latency_msg.latency_log_namespaces[i].req_send_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].req_send_latency.latency_time.tv_nsec = 0;
+        latency_msg.latency_log_namespaces[i].req_complete_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].req_complete_latency.latency_time.tv_nsec = 0;
+        latency_msg.latency_log_namespaces[i].wr_send_latency.io_num = latency_msg.latency_log_namespaces[i].wr_complete_latency.io_num = 0;
+        latency_msg.latency_log_namespaces[i].wr_send_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].wr_send_latency.latency_time.tv_nsec = 0;
+        latency_msg.latency_log_namespaces[i].wr_complete_latency.latency_time.tv_sec = latency_msg.latency_log_namespaces[i].wr_complete_latency.latency_time.tv_nsec = 0;
     }
 }
 
@@ -234,7 +254,9 @@ void copy_latency_ns_log(struct latency_ns_log* temp){
 bool is_io_num_not_empty(){
     bool return_judge = false;
     for(int i = 0; i < namespace_num; i++){
-        if(latency_msg.latency_log_namespaces[i].complete_latency.io_num != 0 || latency_msg.latency_log_namespaces[i].queue_latency.io_num != 0){
+        if(latency_msg.latency_log_namespaces[i].task_complete_latency.io_num != 0 || latency_msg.latency_log_namespaces[i].task_queue_latency.io_num != 0 ||
+            latency_msg.latency_log_namespaces[i].req_send_latency.io_num != 0 || latency_msg.latency_log_namespaces[i].req_complete_latency.io_num != 0 ||
+            latency_msg.latency_log_namespaces[i].wr_send_latency.io_num != 0 || latency_msg.latency_log_namespaces[i].wr_complete_latency.io_num != 0){
             return_judge = true;
             break;
         }

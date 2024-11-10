@@ -2662,7 +2662,7 @@ nvme_rdma_process_send_completion(struct nvme_rdma_poller *poller,
 	rqpair->current_num_sends--;
 
 	#ifdef PERF_LATENCY_LOG
-	struct nvme_req *req = rdma_req->req;
+	struct nvme_request* req = rdma_req->req;
 	clock_gettime(CLOCK_REALTIME, &req->wr_send_complete_time);
 	#endif
 

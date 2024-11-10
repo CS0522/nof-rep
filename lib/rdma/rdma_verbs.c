@@ -5,12 +5,18 @@
 
 #include <rdma/rdma_cma.h>
 
+#include "spdk/util.h"
 #include "spdk/stdinc.h"
 #include "spdk/string.h"
 #include "spdk/likely.h"
  
 #include "spdk_internal/rdma.h"
 #include "spdk/log.h"
+
+#ifdef PERF_LATENCY_LOG
+#include "spdk/latency_nvme_rdma.h"
+#include "spdk/latency_nvme_internal.h"
+#endif
 
 struct spdk_rdma_qp *
 spdk_rdma_qp_create(struct rdma_cm_id *cm_id, struct spdk_rdma_qp_init_attr *qp_attr)

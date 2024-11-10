@@ -1505,22 +1505,22 @@ nvme_complete_request(spdk_nvme_cmd_cb cb_fn, void *cb_arg, struct spdk_nvme_qpa
 
 	// req_send_latency = wr_send_time - req_submit_time
 	timespec_sub(&sub_time, &req->wr_send_time, &req->req_submit_time);
-	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].req_send_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].req_send_latency.latency_time), &sub_time);
+	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].req_send_latency.latency_time), &(latency_msg.latency_log_namespaces[req->ns_id].req_send_latency.latency_time), &sub_time);
 	latency_msg.latency_log_namespaces[req->ns_id].req_send_latency.io_num++;
 
 	// req_complete_latency = req_complete_time - req_submit_time
 	timespec_sub(&sub_time, &req->req_complete_time, &req->req_submit_time);
-	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].req_complete_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].req_complete_latency.latency_time), &sub_time);
+	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].req_complete_latency.latency_time), &(latency_msg.latency_log_namespaces[req->ns_id].req_complete_latency.latency_time), &sub_time);
 	latency_msg.latency_log_namespaces[req->ns_id].req_complete_latency.io_num++;
 
 	// wr_send_latency = wr_send_complete_time - wr_send_time
 	timespec_sub(&sub_time, &req->wr_send_complete_time, &req->wr_send_time);
-	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].wr_send_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].wr_send_latency.latency_time), &sub_time);
+	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].wr_send_latency.latency_time), &(latency_msg.latency_log_namespaces[req->ns_id].wr_send_latency.latency_time), &sub_time);
 	latency_msg.latency_log_namespaces[req->ns_id].wr_send_latency.io_num++;
 
 	// wr_complete_latency = wr_recv_time - wr_send_time
 	timespec_sub(&sub_time, &req->wr_recv_time, &req->wr_send_time);
-	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].wr_complete_latency.latency_time), &(latency_msg.latency_log_namespaces[task->ns_id].wr_complete_latency.latency_time), &sub_time);
+	timespec_add(&(latency_msg.latency_log_namespaces[req->ns_id].wr_complete_latency.latency_time), &(latency_msg.latency_log_namespaces[req->ns_id].wr_complete_latency.latency_time), &sub_time);
 	latency_msg.latency_log_namespaces[req->ns_id].wr_complete_latency.io_num++;
 
 	pthread_mutex_unlock(&log_mutex);

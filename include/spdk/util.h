@@ -20,7 +20,7 @@
 #define APP_THREAD_EXCLUSIVE_REACTOR
 #define PERF_IO_WORKER_EXCLUSIVE_CORE
 
-//#define PERF_LATENCY_LOG
+#define PERF_LATENCY_LOG
 
 #ifdef TARGET_LATENCY_LOG
 #define TARGET_LOG_FILE_PATH "../output/target_latency_log.csv"
@@ -77,7 +77,10 @@ struct latency_log_msg{
 
 extern struct latency_log_msg latency_msg;
 
-void write_log_tasks_to_file(int i, uint32_t queue_io_num, struct timespec queue_latency, uint32_t complete_io_num, struct timespec complete_latency, int new_line);
+void write_log_tasks_to_file(int i, uint32_t task_queue_io_num, struct timespec task_queue_latency, uint32_t task_complete_io_num, struct timespec task_complete_latency,
+							uint32_t req_send_io_num, struct timespec req_send_latency, uint32_t req_complete_io_num, struct timespec req_complete_latency,
+							uint32_t wr_send_io_num, struct timespec wr_send_latency, uint32_t wr_complete_io_num, struct timespec wr_complete_latency,
+							int new_line);
 
 void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num, uint32_t g_ns_num);
 
