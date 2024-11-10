@@ -3438,7 +3438,7 @@ child_thread_fn(void *arg)
     eplased_time = current_time.tv_sec - start_time.tv_sec;
     
     /* 通过超时来退出无限循环 */
-    while (eplased_time < g_time_in_sec * 2.0)
+    while (eplased_time < g_time_in_sec * 1.2 + 6)
     {
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &oldstate);
 
