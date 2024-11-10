@@ -139,7 +139,7 @@ TEST_TIME=180
 MIN_IOSIZE=8192    # 8K
 MAX_IOSIZE=262144  # 256K
 IO_QUEUE_SIZE_MIN=1
-IO_QUEUE_SIZE_MAX=32
+IO_QUEUE_SIZE_MAX=1
 is_reverse=0
 is_sequence=1
 just_get_log=0
@@ -859,6 +859,8 @@ echo "All nodes are successfully set!"
 
 #shutdown_all_target
 
+cofigure_all_nodes_wtih_log
+
 # 预热, 使盘进入 GC
 warm_up
 
@@ -871,7 +873,7 @@ warm_up
 
 #test_single_local_pcie
 
-cofigure_all_nodes_wtih_log
+#cofigure_all_nodes_wtih_log
 
 # 三副本性能测试
 test_rep_remote_target
