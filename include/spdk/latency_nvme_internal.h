@@ -41,6 +41,7 @@ struct nvme_request {
 	#ifdef TARGET_LATENCY_LOG
 	struct timespec start_time;
 	#endif
+    uint32_t io_id;
 
 	uint8_t				retries;
 
@@ -86,7 +87,6 @@ struct nvme_request {
 
 	#ifdef PERF_LATENCY_LOG
 	// 统计性能涉及 id
-    uint32_t io_id;
 	uint32_t ns_id;
 	// 统计性能涉及计算时间
 	// 提交 nvme req 的时间

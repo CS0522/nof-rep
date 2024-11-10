@@ -1950,7 +1950,6 @@ submit_io_rep(struct worker_thread *worker, int queue_depth)
     struct ns_worker_ctx *ns_ctx = NULL;
     struct perf_task *main_task = NULL;
     uint32_t io_id = 1;
-	uint32_t ns_id = 0;
 
     // [通过修改此处代码逻辑，来实现不同的入队顺序]
     // 先为每个 io 请求生成所有副本，再执行提交
@@ -1958,6 +1957,7 @@ submit_io_rep(struct worker_thread *worker, int queue_depth)
 	// 编号为 0 的 io_id 代表非 io 任务
     while (queue_depth-- > 0){
         bool is_main = true;
+		uint32_t ns_id = 0;
         TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
             if(is_main){
                 main_task = allocate_main_task(ns_ctx, queue_depth, io_id, ns_id);
@@ -3869,6 +3869,7 @@ main(int argc, char **argv)
 	latency_msg.latency_log_namespaces = malloc(g_num_namespaces * sizeof(struct latency_ns_log));
 	namespace_num = g_num_namespaces;
 	init_log_fn();
+	is_prob_finish = true;
 
     /* 创建子线程来写日志 */
     pthread_t log_thread_id = 0;

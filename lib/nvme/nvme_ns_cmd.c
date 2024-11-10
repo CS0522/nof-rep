@@ -692,7 +692,8 @@ spdk_nvme_ns_cmd_read_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *q
 					      rc);
 	}
 }
- 
+
+#ifdef PERF_LATENCY_LOG
 int
 spdk_nvme_ns_cmd_read_with_md_io_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair, void *buffer,
 			      void *metadata,
@@ -766,6 +767,7 @@ spdk_nvme_ns_cmd_read_with_md_ns_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qp
 					      rc);
 	}
 }
+#endif
 
 static int
 nvme_ns_cmd_rw_ext(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair, void *buffer,
@@ -885,6 +887,7 @@ spdk_nvme_ns_cmd_readv_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *
 	}
 }
 
+#ifdef PERF_LATENCY_LOG
 int
 spdk_nvme_ns_cmd_readv_with_md_io_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
 			       uint64_t lba, uint32_t lba_count,
@@ -962,6 +965,7 @@ spdk_nvme_ns_cmd_readv_with_md_ns_id(struct spdk_nvme_ns *ns, struct spdk_nvme_q
 					      rc);
 	}
 }
+#endif
 
 static int
 nvme_ns_cmd_rwv_ext(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair, uint64_t lba,
@@ -1207,6 +1211,7 @@ spdk_nvme_ns_cmd_write_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *
 	}
 }
 
+#ifdef PERF_LATENCY_LOG
 int
 spdk_nvme_ns_cmd_write_with_md_io_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
 			       void *buffer, void *metadata, uint64_t lba,
@@ -1272,6 +1277,7 @@ spdk_nvme_ns_cmd_write_with_md_ns_id(struct spdk_nvme_ns *ns, struct spdk_nvme_q
 					      rc);
 	}
 }
+#endif
 
 int
 spdk_nvme_ns_cmd_write_ext(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
@@ -1352,6 +1358,7 @@ spdk_nvme_ns_cmd_writev_with_md(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair 
 	}
 }
 
+#ifdef PERF_LATENCY_LOG
 int
 spdk_nvme_ns_cmd_writev_with_md_io_id(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
 				uint64_t lba, uint32_t lba_count,
@@ -1429,7 +1436,8 @@ spdk_nvme_ns_cmd_writev_with_md_ns_id(struct spdk_nvme_ns *ns, struct spdk_nvme_
 					      rc);
 	}
 } 
- 
+#endif
+
 int
 spdk_nvme_ns_cmd_writev_ext(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair, uint64_t lba,
 			    uint32_t lba_count, spdk_nvme_cmd_cb cb_fn, void *cb_arg,

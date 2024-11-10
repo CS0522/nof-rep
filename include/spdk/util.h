@@ -20,7 +20,7 @@
 #define APP_THREAD_EXCLUSIVE_REACTOR
 #define PERF_IO_WORKER_EXCLUSIVE_CORE
 
-#define PERF_LATENCY_LOG
+//#define PERF_LATENCY_LOG
 
 #ifdef TARGET_LATENCY_LOG
 #define TARGET_LOG_FILE_PATH "../output/target_latency_log.csv"
@@ -92,6 +92,8 @@ extern pthread_mutex_t log_mutex;
 extern uint32_t namespace_num;
 
 extern int msgid;
+
+extern bool is_prob_finish;
 
 void latency_log_1s(union sigval sv);
 

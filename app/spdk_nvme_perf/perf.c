@@ -3616,6 +3616,7 @@ main(int argc, char **argv)
 	latency_msg.latency_log_namespaces = malloc(g_num_namespaces * sizeof(struct latency_ns_log));
 	namespace_num = g_num_namespaces;
 	init_log_fn();
+	is_prob_finish = true;
 
     /* 创建子线程来写日志 */
     pthread_t log_thread_id = 0;

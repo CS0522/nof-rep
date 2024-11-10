@@ -100,6 +100,8 @@ static bool if_open = false;
 
 struct latency_log_msg latency_msg;
 
+bool is_prob_finish = false;
+
 void fprint_log(FILE* file, int i, int num, char* name, struct timespec latency, uint32_t io_num){
     struct timespec average_latency = latency;
     timespec_divide(&average_latency, io_num);
