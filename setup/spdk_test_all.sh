@@ -403,7 +403,7 @@ function configure_all_nodes_without_log(){
     done
 }
 
-function cofigure_all_nodes_wtih_log(){
+function configure_all_nodes_wtih_log(){
     local curr_node=0
     while (( ${curr_node}<${node_num} )); do
         local hostname=${hostnames[${curr_node}]}
@@ -859,7 +859,7 @@ echo "All nodes are successfully set!"
 
 #shutdown_all_target
 
-cofigure_all_nodes_wtih_log
+configure_all_nodes_wtih_log
 
 # 预热, 使盘进入 GC
 warm_up
@@ -873,7 +873,7 @@ warm_up
 
 #test_single_local_pcie
 
-#cofigure_all_nodes_wtih_log
+#configure_all_nodes_wtih_log
 
 # 三副本性能测试
 test_rep_remote_target
