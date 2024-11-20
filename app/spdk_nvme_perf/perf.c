@@ -1358,10 +1358,10 @@ static bool judge_if_send(){
 	io_send_period.tv_sec = 1;
 	io_send_period.tv_nsec = 0;
 	timespec_divide(&io_send_period, io_num_per_second);
-	clock_gettime(CLOCK_REALTIME, now_time);
+	clock_gettime(CLOCK_REALTIME, &now_time);
 	timespec_sub(&now_time, &now_time, &before_time);
 	if(!timespec_sub(&now_time, &now_time, &io_send_period)){
-		clock_gettime(CLOCK_REALTIME, before_time);
+		clock_gettime(CLOCK_REALTIME, &before_time);
 		return true;
 	}
 	return false;
@@ -1912,7 +1912,7 @@ work_fn(void *arg)
 
 	uint32_t ns_id = 0;
 
-	clock_gettime(CLOCK_REALTIME, before_time);
+	clock_gettime(CLOCK_REALTIME, &before_time);
 
 	/* Submit initial I/O for each namespace. */
 	TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
