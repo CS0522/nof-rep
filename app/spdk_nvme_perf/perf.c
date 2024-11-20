@@ -2605,7 +2605,7 @@ parse_metadata(const char *metacfg_str)
 	return 0;
 }
 
-#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:"
+#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:K:E:"
 
 static const struct option g_perf_cmdline_opts[] = {
 #define IO_LIMIT 'K'
