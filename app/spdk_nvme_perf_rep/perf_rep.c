@@ -317,6 +317,9 @@ uint8_t *g_psk = NULL;
  */
 static uint32_t g_rep_num = 3;
 static bool g_send_main_rep_finally = false;
+static uint32_t io_limit = 1;
+static uint32_t io_num_per_second = 0;
+static struct timespec before_time;
 
 #ifdef PERF_LATENCY_LOG
 /** 消息队列 id */
@@ -1347,6 +1350,21 @@ static const struct ns_fn_table nvme_fn_table = {
 	.dump_transport_stats	= nvme_dump_transport_stats
 };
 
+static bool judge_if_send(){
+	struct timespec now_time;
+	struct timespec io_send_period;
+	io_send_period.tv_sec = 1;
+	io_send_period.tv_nsec = 0;
+	timespec_divide(&io_send_period, io_num_per_second);
+	clock_gettime(CLOCK_REALTIME, now_time);
+	timespec_sub(&now_time, &now_time, &before_time);
+	if(!timespec_sub(&now_time, &now_time, &io_send_period)){
+		clock_gettime(CLOCK_REALTIME, before_time);
+		return true;
+	}
+	return false;
+}
+
 static int
 build_nvme_name(char *name, size_t length, struct spdk_nvme_ctrlr *ctrlr)
 {
@@ -1452,7 +1470,11 @@ register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns)
 	entry->u.nvme.ns = ns;
 	entry->num_io_requests = entries * spdk_divide_round_up(g_queue_depth, g_nr_io_queues_per_ns);
 
+#ifdef PERF_LATENCY_LOG
+	entry->size_in_ios = ns_size / g_io_size_bytes / io_limit;
+#else
 	entry->size_in_ios = ns_size / g_io_size_bytes;
+#endif
 	entry->io_size_blocks = g_io_size_bytes / sector_size;
 
 	if (g_is_random) {
@@ -1700,7 +1722,18 @@ submit_single_io_rep(struct perf_task *main_task)
 #endif
         ns_ctx = task->ns_ctx;
         entry = ns_ctx->entry;
-        rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
+		if(io_num_per_second == 0){
+			rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
+		}else{
+			while(1){
+				if(judge_if_send()){
+					rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
+					break;
+				}else{
+					sleep(io_num_per_second / 10);
+				}
+			}
+		}
 
         if (spdk_unlikely(rc != 0)) {
             if (g_continue_on_error) {
@@ -2102,6 +2135,8 @@ work_fn(void *arg)
 		tsc_end = tsc_current + g_time_in_sec * g_tsc_rate;
 	}
 
+	clock_gettime(CLOCK_REALTIME, before_time);
+
     // 执行下副本io。在此函数内枚举 ns_ctx
     submit_io_rep(worker, g_queue_depth);
 
@@ -2273,6 +2308,8 @@ usage(char *program_name)
 #endif
 	printf("\n\n");
 	printf("==== BASIC OPTIONS ====\n\n");
+	printf("\t-K, --io-limit change the io range to io_size / io_limit\n");
+	printf("\t-E. --io-num-per-second the io_num to send per second\n");
 	printf("\t-f, --final-send-main-rep if send main rep finally\n");
     // 添加 副本个数 参数
     printf("\t-n, --rep-num <val> replica num of tasks\n");
@@ -2800,6 +2837,10 @@ parse_metadata(const char *metacfg_str)
 #define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:n:f"
 
 static const struct option g_perf_cmdline_opts[] = {
+#define IO_LIMIT 'K'
+    {"io-limit",     required_argument, NULL, IO_LIMIT},
+#define IO_NUM_PER_SECOND 'E'
+    {"io-num-per-second",     required_argument, NULL, IO_NUM_PER_SECOND},
 // 默认情况下主副本第一个传输，否则最后一个传输
 #define FINAL_SEND_MAIN_REP 'f'
     {"final-send-main-rep",     no_argument, NULL, FINAL_SEND_MAIN_REP},
@@ -2925,6 +2966,8 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 
 	while ((op = getopt_long(argc, argv, PERF_GETOPT_SHORT, g_perf_cmdline_opts, &long_idx)) != -1) {
 		switch (op) {
+		case IO_LIMIT:
+		case IO_NUM_PER_SECOND:
         // 添加 副本个数 参数
         case PERF_REP_NUM:
 		case PERF_WARMUP_TIME:
@@ -2945,6 +2988,12 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 				return val;
 			}
 			switch (op) {
+		    case IO_LIMIT:
+				io_limit = val;
+				break;
+			case IO_NUM_PER_SECOND:
+				io_num_per_second = val;
+				break;
             case PERF_REP_NUM:
                 g_rep_num = val;
                 break;
