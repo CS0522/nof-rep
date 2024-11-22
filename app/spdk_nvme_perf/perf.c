@@ -292,10 +292,6 @@ static uint8_t g_transport_tos = 0;
 static uint32_t g_rdma_srq_size;
 uint8_t *g_psk = NULL;
 
-static uint32_t io_limit = 1;
-static uint32_t io_num_per_second = 0;
-static struct timespec before_time;
-
 #ifdef PERF_LATENCY_LOG
 /** 消息队列 id */
 static int g_msgid = 0;
@@ -1352,23 +1348,6 @@ build_nvme_ns_name(char *name, size_t length, struct spdk_nvme_ctrlr *ctrlr, uin
 
 }
 
-static bool judge_if_send(){
-	struct timespec now_time;
-	struct timespec io_send_period;
-	struct timespec temp;
-	io_send_period.tv_sec = 1;
-	io_send_period.tv_nsec = 0;
-	timespec_divide(&io_send_period, io_num_per_second);
-	clock_gettime(CLOCK_REALTIME, &now_time);
-	temp = now_time;
-	timespec_sub(&now_time, &now_time, &before_time);
-	if(!timespec_sub(&now_time, &now_time, &io_send_period)){
-		before_time = temp;
-		return true;
-	}
-	return false;
-}
-
 static void
 register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns)
 {
@@ -1430,12 +1409,7 @@ register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns)
 	entry->u.nvme.ns = ns;
 	entry->num_io_requests = entries * spdk_divide_round_up(g_queue_depth, g_nr_io_queues_per_ns);
 
-#ifdef PERF_LATENCY_LOG
-	entry->size_in_ios = ns_size / g_io_size_bytes / io_limit;
-#else
 	entry->size_in_ios = ns_size / g_io_size_bytes;
-#endif
-
 	entry->io_size_blocks = g_io_size_bytes / sector_size;
 
 	if (g_is_random) {
@@ -1627,14 +1601,7 @@ submit_single_io(struct perf_task *task)
         clock_gettime(CLOCK_REALTIME, &task->create_time);
 #endif
 
-	if(io_num_per_second == 0){
-		rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
-	}else{
-		while(!judge_if_send()){
-			continue;
-		}
-		rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
-	}
+	rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
 
 	if (spdk_unlikely(rc != 0)) {
 		if (g_continue_on_error) {
@@ -1910,8 +1877,6 @@ work_fn(void *arg)
 
 	uint32_t ns_id = 0;
 
-	clock_gettime(CLOCK_REALTIME, &before_time);
-
 	/* Submit initial I/O for each namespace. */
 	TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
 		submit_io(ns_ctx, g_queue_depth, ns_id);
@@ -2091,8 +2056,6 @@ usage(char *program_name)
 #endif
 	printf("\n\n");
 	printf("==== BASIC OPTIONS ====\n\n");
-	printf("\t-K, --io-limit change the io range to io_size / io_limit\n");
-	printf("\t-E. --io-num-per-second the io_num to send per second\n");
 	printf("\t-q, --io-depth <val> io depth\n");
 	printf("\t-o, --io-size <val> io size in bytes\n");
 	printf("\t-w, --io-pattern <pattern> io pattern type, must be one of\n");
@@ -2603,13 +2566,9 @@ parse_metadata(const char *metacfg_str)
 	return 0;
 }
 
-#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:K:E:"
+#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:"
 
 static const struct option g_perf_cmdline_opts[] = {
-#define IO_LIMIT 'K'
-    {"io-limit",     required_argument, NULL, IO_LIMIT},
-#define IO_NUM_PER_SECOND 'E'
-    {"io-num-per-second",     required_argument, NULL, IO_NUM_PER_SECOND},
 #define PERF_WARMUP_TIME	'a'
 	{"warmup-time",			required_argument,	NULL, PERF_WARMUP_TIME},
 #define PERF_ALLOWED_PCI_ADDR	'b'
@@ -2729,8 +2688,6 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 
 	while ((op = getopt_long(argc, argv, PERF_GETOPT_SHORT, g_perf_cmdline_opts, &long_idx)) != -1) {
 		switch (op) {
-		case IO_LIMIT:
-		case IO_NUM_PER_SECOND:
 		case PERF_WARMUP_TIME:
 		case PERF_SHMEM_GROUP_ID:
 		case PERF_MAX_COMPLETIONS_PER_POLL:
@@ -2749,12 +2706,6 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 				return val;
 			}
 			switch (op) {
-		    case IO_LIMIT:
-				io_limit = val;
-				break;
-			case IO_NUM_PER_SECOND:
-				io_num_per_second = val;
-				break;
 			case PERF_WARMUP_TIME:
 				g_warmup_time_in_sec = val;
 				break;
