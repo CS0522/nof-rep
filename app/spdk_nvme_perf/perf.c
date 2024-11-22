@@ -1355,13 +1355,15 @@ build_nvme_ns_name(char *name, size_t length, struct spdk_nvme_ctrlr *ctrlr, uin
 static bool judge_if_send(){
 	struct timespec now_time;
 	struct timespec io_send_period;
+	struct timespec temp;
 	io_send_period.tv_sec = 1;
 	io_send_period.tv_nsec = 0;
 	timespec_divide(&io_send_period, io_num_per_second);
 	clock_gettime(CLOCK_REALTIME, &now_time);
+	temp = now_time;
 	timespec_sub(&now_time, &now_time, &before_time);
 	if(!timespec_sub(&now_time, &now_time, &io_send_period)){
-		clock_gettime(CLOCK_REALTIME, &before_time);
+		before_time = temp;
 		return true;
 	}
 	return false;
@@ -1628,14 +1630,10 @@ submit_single_io(struct perf_task *task)
 	if(io_num_per_second == 0){
 		rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
 	}else{
-		while(1){
-			if(judge_if_send()){
-				rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
-				break;
-			}else{
-				sleep(io_num_per_second / 10);
-			}
+		while(!judge_if_send()){
+			continue;
 		}
+		rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
 	}
 
 	if (spdk_unlikely(rc != 0)) {

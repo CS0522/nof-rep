@@ -1730,7 +1730,10 @@ submit_single_io_rep(struct perf_task *main_task)
 					rc = entry->fn_table->submit_io(task, ns_ctx, entry, offset_in_ios);
 					break;
 				}else{
-					sleep(io_num_per_second / 10);
+					struct timespec sleep_time;
+					sleep_time.tv_sec = 0;
+					sleep_time.tv_nsec = 100000000 / io_num_per_second;
+					nanosleep(&sleep_time, NULL);
 				}
 			}
 		}

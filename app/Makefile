@@ -15,6 +15,7 @@ DIRS-y += spdk_tgt
 DIRS-y += spdk_lspci
 DIRS-y += spdk_nvme_perf
 DIRS-y += spdk_nvme_perf_rep
+DIRS-y += spdk_nvme_perf_batch
 DIRS-y += spdk_nvme_identify
 DIRS-y += spdk_nvme_discover
 ifneq ($(OS),Windows)
