@@ -7,64 +7,6 @@ struct latency_module_log module_log;
 
 bool is_io_log = false;
 
-int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b) {
-    result->tv_sec = a->tv_sec - b->tv_sec;
-    result->tv_nsec = a->tv_nsec - b->tv_nsec;
-
-    // 如果纳秒部分小于零，需要借 1 秒
-    if (result->tv_nsec < 0) {
-        result->tv_sec -= 1;
-        result->tv_nsec += 1000000000;  // 纳秒值变为正数
-    }
-
-    // 如果秒数小于零，返回负数差值
-    if (result->tv_sec < 0) {
-        return -1;  // 返回负值表示 a 小于 b
-    }
-
-    return 0;  // 返回 0 表示 a >= b
-}
-
-void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b) {
-    result->tv_sec = a->tv_sec + b->tv_sec;
-    result->tv_nsec = a->tv_nsec + b->tv_nsec;
-
-    // 如果纳秒溢出，调整秒数和纳秒
-    if (result->tv_nsec >= 1000000000) {
-        result->tv_sec += 1;
-        result->tv_nsec -= 1000000000;
-    }
-}
-
-int timespec_divide(struct timespec *ts, int num) {
-    if (num <= 0) {
-        // 无效的除数
-        return -1;
-    }
-
-    // 先处理秒部分
-    long sec_result = ts->tv_sec / num;
-    long sec_remainder = ts->tv_sec % num;
-
-    // 处理纳秒部分
-    long nsec_result = ts->tv_nsec / num;
-    long nsec_remainder = ts->tv_nsec % num;
-
-    // 将剩余的秒部分（余数）转化为纳秒并加到纳秒部分
-    long remainder_nsec_as_sec = sec_remainder * 1000000000L + nsec_remainder;
-    nsec_result += remainder_nsec_as_sec / num;
-
-    // 将可能的纳秒溢出部分加到秒
-    sec_result += nsec_result / 1000000000L;
-    nsec_result %= 1000000000L; // 保证纳秒部分小于1秒
-
-    // 更新结果
-    ts->tv_sec = sec_result;
-    ts->tv_nsec = nsec_result;
-
-    return 0; // 成功
-}
-
 void write_log_to_file(const char* module, struct timespec latency_time, uint32_t io_num){
     static uint64_t log_num = 0;
     if(!log_num){
@@ -314,6 +256,8 @@ void fini_log_fn(){
     pthread_mutex_destroy(&log_mutex);
 }
 
+#endif
+
 int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b) {
     result->tv_sec = a->tv_sec - b->tv_sec;
     result->tv_nsec = a->tv_nsec - b->tv_nsec;
@@ -371,5 +315,3 @@ int timespec_divide(struct timespec *ts, int num) {
 
     return 0; // 成功
 }
-
-#endif

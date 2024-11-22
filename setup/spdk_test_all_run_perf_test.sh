@@ -58,6 +58,9 @@ workload=$8
 run_time=$9
 host_status=${10}
 send_main_rep_finally=${11}
+io_limit=${12}
+io_num_per_second=${13}
+batch=${14}
 transport_ids=""
 ssh_arg="-o StrictHostKeyChecking=no"
 spdk_dir="/opt/Workspace/spdk-24.05.x-host"
@@ -98,6 +101,15 @@ fi
 if [[ -z "${send_main_rep_finally}" ]]; then
     send_main_rep_finally=0
 fi
+if [[ -z "${io_limit}" ]]; then
+    io_limit=0
+fi
+if [[ -z "${io_num_per_second}" ]]; then
+    io_num_per_second=0
+fi
+if [[ -z "${batch}" ]]; then
+    batch=0
+fi
 ### end check ######
 
 # read nodes local ip from file
@@ -116,16 +128,17 @@ function get_nodes_local_ip() {
 }
 
 bdf=""
+bdf_array=()
 
 function get_bdf() {
     bdf=$(
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./scripts/setup.sh status 2>&1 | grep NVMe | tail -n 1 | awk '{print \$2}'
+        ./scripts/setup.sh status 2>&1 | grep NVMe | tail -n 3 | awk '{print \$2}'
 ENDSSH
     )
-    bdf=`echo ${bdf} | awk '{print $NF}'`
+    mapfile -t bdf_array <<< `echo "$bdf" | tail -n 3`
 }
 
 # get local IP address
@@ -141,23 +154,26 @@ function set_transport_ids() {
     local curr_node=0
     while (( ${curr_node}<${node_num} )); do
         # if IP is host's IP
-        if [[ ${curr_node} -eq 0 ]]; then
-            if [[ ${host_status} -eq 1 ]]; then
-                # 走本地环回, IP 为自身 IP (相当于走网卡) 
-                transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:${nodes_local_ip[${curr_node}]} trsvcid:4420'"
-            elif [[ ${host_status} -eq 2 ]]; then
-                # 走本地环回, IP 为 127.0.0.1
-                transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:127.0.0.1 trsvcid:4420'"
-            elif [[ ${host_status} -eq 3 ]]; then
-                # 走 PCIe
-                transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf}'"
+        if [[ ${host_status} -eq 4 ]]; then
+            transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf_array[${curr_node}]}'"
+        else
+            if [[ ${curr_node} -eq 0 ]]; then
+                if [[ ${host_status} -eq 1 ]]; then
+                    # 走本地环回, IP 为自身 IP (相当于走网卡) 
+                    transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:${nodes_local_ip[${curr_node}]} trsvcid:4420'"
+                elif [[ ${host_status} -eq 2 ]]; then
+                    # 走本地环回, IP 为 127.0.0.1
+                    transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:127.0.0.1 trsvcid:4420'"
+                elif [[ ${host_status} -eq 3 ]]; then
+                    # 走 PCIe
+                    transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf}'"
+                fi
+                curr_node=$((curr_node + 1))
+                continue
             fi
-            curr_node=$((curr_node + 1))
-            continue
+            # target's IP
+            transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:${nodes_local_ip[${curr_node}]} trsvcid:4420'"
         fi
-        # target's IP
-        transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:${nodes_local_ip[${curr_node}]} trsvcid:4420'"
-
         curr_node=`expr ${curr_node} + 1`
     done
 
@@ -199,6 +215,30 @@ function set_send_main_rep_finally() {
     fi
 }
 
+function set_io_limit() {
+    if [[ ${io_limit} -eq 0 ]]; then
+        io_limit=""
+    else
+        io_limit="-K ${io_limit}"
+    fi
+}
+
+function set_io_num_per_second() {
+    if [[ ${io_num_per_second} -eq 0 ]]; then
+        io_num_per_second=""
+    else
+        io_num_per_second="-E ${io_num_per_second}"
+    fi
+}
+
+function set_batch() {
+    if [[ ${batch} -eq 0 ]]; then
+        batch=""
+    else
+        batch="-B ${batch}"
+    fi
+}
+
 # set params funtion
 function set_params() {
     get_nodes_local_ip
@@ -209,13 +249,16 @@ function set_params() {
     set_workload
     set_run_time
     set_send_main_rep_finally
+    set_io_limit
+    set_io_num_per_second
+    set_batch
 }
 
 function run_perf() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
@@ -224,7 +267,7 @@ function run_perf_rep() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${send_main_rep_finally} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${send_main_rep_finally} ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }

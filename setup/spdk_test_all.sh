@@ -832,6 +832,22 @@ function test_different_local_pcie(){
     done
 }
 
+function test_local_three_pcie(){
+    local node_num=3
+    local host_status=4
+    local io_size=4096
+    local io_queue_size=1
+    while (( ${io_queue_size}<=32 )); do
+        while (( ${io_size}<=262144 )); do
+            local hostname=${hostnames[0]}
+            ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf ${node_num} ./setup/setup_output/nodes_local_ip.txt ${io_queue_size} ${io_size} randwrite ${TEST_TIME} ${host_status} 0
+            ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 1 ${host_status} 1 different-local_pcie/randwrite-io_size_${io_size}-io_queue_size_${io_queue_size}-sequence ${hostname}
+            io_size=`expr ${io_size} \* 2`
+        done
+        io_queue_size=`expr ${io_queue_size} \* 2`
+    done
+}
+
 function shutdown_all_target(){
     local target_num=0
     while (( ${target_num}<${node_num} )); do
@@ -852,17 +868,17 @@ function shutdown_all_target(){
 
 ### run
 output_hostnames
-setup_all_nodes_fn
+#setup_all_nodes_fn
 echo "All nodes are successfully set!"
 
-#configure_all_nodes_without_log
+configure_all_nodes_without_log
 
 #shutdown_all_target
 
-configure_all_nodes_wtih_log
+#configure_all_nodes_wtih_log
 
 # 预热, 使盘进入 GC
-warm_up
+#warm_up
 
 # 单盘的性能测试
 #test_single_remote_target
@@ -876,18 +892,18 @@ warm_up
 #configure_all_nodes_wtih_log
 
 # 三副本性能测试
-test_rep_remote_target
+#test_rep_remote_target
 
-test_rep_local_target
+#test_rep_local_target
 
 # test_rep_local_target_127
 
 #test_rep_local_pcie
 
 # 非三副本的性能测试
-test_different_remote_target
+#test_different_remote_target
 
-test_different_local_target
+#test_different_local_target
 
 # test_different_local_target_127
 

@@ -42,12 +42,6 @@ extern pthread_mutex_t log_mutex;
 
 extern bool is_io_log;
 
-int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b);
-
-void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
-
-int timespec_divide(struct timespec *ts, int num);
-
 void write_log_to_file(const char* module, struct timespec latency_time, uint32_t iops);
 
 void write_latency_log(void* ctx);
@@ -101,13 +95,13 @@ void init_log_fn();
 
 void fini_log_fn();
 
+#endif
+
 int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b);
 
 void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
 
 int timespec_divide(struct timespec *ts, int num);
-
-#endif
 
 #ifdef __cplusplus
 extern "C" {
