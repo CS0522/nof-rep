@@ -59,8 +59,9 @@ run_time=$9
 host_status=${10}
 send_main_rep_finally=${11}
 io_limit=${12}
-io_num_per_second=${13}
-batch=${14}
+rep_num=${13}
+io_num_per_second=${14}
+batch=${15}
 core_mask=0xc
 transport_ids=""
 ssh_arg="-o StrictHostKeyChecking=no"
@@ -104,6 +105,9 @@ if [[ -z "${send_main_rep_finally}" ]]; then
 fi
 if [[ -z "${io_limit}" ]]; then
     io_limit=0
+fi
+if [[ -z "${rep_num}" ]]; then
+    rep_num=0
 fi
 if [[ -z "${io_num_per_second}" ]]; then
     io_num_per_second=0
@@ -157,7 +161,7 @@ function set_transport_ids() {
         # if IP is host's IP
         if [[ ${host_status} -eq 4 ]]; then
             transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf_array[${curr_node}]}'"
-            core_mask=0x1c
+            core_mask=0x3c
         else
             if [[ ${curr_node} -eq 0 ]]; then
                 if [[ ${host_status} -eq 1 ]]; then
@@ -225,6 +229,14 @@ function set_io_limit() {
     fi
 }
 
+function set_rep_num() {
+    if [[ ${rep_num} -eq 0 ]]; then
+        rep_num="-n 3"
+    else
+        rep_num="-n ${rep_num}"
+    fi
+}
+
 function set_io_num_per_second() {
     if [[ ${io_num_per_second} -eq 0 ]]; then
         io_num_per_second=""
@@ -252,6 +264,7 @@ function set_params() {
     set_run_time
     set_send_main_rep_finally
     set_io_limit
+    set_rep_num
     set_io_num_per_second
     set_batch
 }
@@ -269,7 +282,7 @@ function run_perf_rep() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c ${core_mask} ${send_main_rep_finally} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c ${core_mask} ${send_main_rep_finally} ${rep_num} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
@@ -287,7 +300,7 @@ function run_perf_rep_batch() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_rep_batch ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c ${core_mask} ${send_main_rep_finally} ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf_rep_batch ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c ${core_mask} ${send_main_rep_finally} ${io_limit} ${io_num_per_second} ${batch} ${rep_num} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
