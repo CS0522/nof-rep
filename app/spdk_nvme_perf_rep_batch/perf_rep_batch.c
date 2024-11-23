@@ -1412,6 +1412,7 @@ static bool judge_if_send(){
 	io_send_period.tv_sec = 1;
 	io_send_period.tv_nsec = 0;
 	timespec_divide(&io_send_period, io_num_per_second);
+	timespec_multiply(&io_send_period, batch_size);
 	clock_gettime(CLOCK_REALTIME, &now_time);
 	temp = now_time;
 	timespec_sub(&now_time, &now_time, &before_time);

@@ -315,3 +315,27 @@ int timespec_divide(struct timespec *ts, int num) {
 
     return 0; // 成功
 }
+
+int timespec_multiply(struct timespec *ts, int num) {
+    if (num <= 0) {
+        // 无效的乘数
+        return -1;
+    }
+
+    // 使用 long long 来处理较大的乘法，避免溢出
+    long long sec_result = (long long)ts->tv_sec * num;
+    long long nsec_result = (long long)ts->tv_nsec * num;
+
+    // 处理纳秒溢出
+    long long carry_sec = nsec_result / 1000000000L;  // 计算超过1秒的部分
+    nsec_result %= 1000000000L;  // 保证纳秒部分小于1秒
+
+    // 将溢出的秒部分加到秒的结果
+    sec_result += carry_sec;
+
+    // 更新结果
+    ts->tv_sec = (long)sec_result;
+    ts->tv_nsec = (long)nsec_result;
+
+    return 0; // 成功
+}

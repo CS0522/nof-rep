@@ -1371,6 +1371,7 @@ static bool judge_if_send(){
 	io_send_period.tv_sec = 1;
 	io_send_period.tv_nsec = 0;
 	timespec_divide(&io_send_period, io_num_per_second);
+	timespec_multiply(&io_send_period, batch_size);
 	clock_gettime(CLOCK_REALTIME, &now_time);
 	temp = now_time;
 	timespec_sub(&now_time, &now_time, &before_time);
@@ -1898,8 +1899,6 @@ work_fn(void *arg)
 	TAILQ_HEAD(, perf_task)	swap;
 	struct perf_task *task;
 
-	batch_size = batch_size * perf_num;
-
 	/* Allocate queue pairs for each namespace. */
 	TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
 		if (init_ns_worker_ctx(ns_ctx) != 0) {
@@ -1981,7 +1980,7 @@ work_fn(void *arg)
 		}
 
 		if(io_num_per_second > 0){
-			while(submit_batch < batch_size){
+			while(submit_batch < batch_size * perf_num){
 				struct perf_task_link* temp_perf_task_link = perf_task_link_head->next;
 				if(temp_perf_task_link != NULL){
 					perf_task_link_head->next = temp_perf_task_link->next;
@@ -1992,7 +1991,7 @@ work_fn(void *arg)
 				submit_single_io(temp_perf_task_link->task);
 				submit_batch++;
 			}
-			if(batch >= batch_size){
+			if(batch >= batch_size * perf_num){
 				batch = 0;
 				submit_batch = 0;
 				while(!judge_if_send()){

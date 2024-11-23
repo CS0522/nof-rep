@@ -103,6 +103,8 @@ void timespec_add(struct timespec *result, const struct timespec *a, const struc
 
 int timespec_divide(struct timespec *ts, int num);
 
+int timespec_multiply(struct timespec *ts, int num);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
