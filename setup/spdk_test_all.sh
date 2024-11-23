@@ -137,9 +137,9 @@ run_output_dir="run_output"
 WARM_UP_TIME=300
 TEST_TIME=180     
 MIN_IOSIZE=4096    # 8K
-MAX_IOSIZE=262144  # 256K
+MAX_IOSIZE=4096  # 256K
 IO_QUEUE_SIZE_MIN=1
-IO_QUEUE_SIZE_MAX=32
+IO_QUEUE_SIZE_MAX=1
 is_reverse=0
 is_sequence=1
 just_get_log=0
@@ -958,10 +958,10 @@ function shutdown_all_target(){
 
 ### run
 output_hostnames
-setup_all_nodes_fn
+#setup_all_nodes_fn
 echo "All nodes are successfully set!"
 
-configure_all_nodes_without_log
+#configure_all_nodes_without_log
 
 #shutdown_all_target
 
@@ -999,11 +999,11 @@ configure_all_nodes_without_log
 
 #test_different_local_pcie
 
-test_local_three_pcie
+#test_local_three_pcie
 
-configure_all_nodes_wtih_log
+#configure_all_nodes_wtih_log
 
-test_two_rep_remote_target
+#test_two_rep_remote_target
 test_two_rep_local_target
 test_two_different_remote_target
 test_two_different_local_target

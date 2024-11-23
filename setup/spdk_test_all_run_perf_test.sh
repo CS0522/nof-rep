@@ -61,6 +61,7 @@ send_main_rep_finally=${11}
 io_limit=${12}
 io_num_per_second=${13}
 batch=${14}
+core_mask=0xc
 transport_ids=""
 ssh_arg="-o StrictHostKeyChecking=no"
 spdk_dir="/opt/Workspace/spdk-24.05.x-host"
@@ -156,6 +157,7 @@ function set_transport_ids() {
         # if IP is host's IP
         if [[ ${host_status} -eq 4 ]]; then
             transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf_array[${curr_node}]}'"
+            core_mask=0x1c
         else
             if [[ ${curr_node} -eq 0 ]]; then
                 if [[ ${host_status} -eq 1 ]]; then
@@ -258,7 +260,7 @@ function run_perf() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c ${core_mask} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
@@ -267,7 +269,7 @@ function run_perf_rep() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${send_main_rep_finally} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c ${core_mask} ${send_main_rep_finally} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
@@ -276,7 +278,7 @@ function run_perf_batch() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_batch ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf_batch ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c ${core_mask} ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
@@ -285,7 +287,7 @@ function run_perf_rep_batch() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_rep_batch ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${send_main_rep_finally} ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf_rep_batch ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c ${core_mask} ${send_main_rep_finally} ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
