@@ -1483,11 +1483,8 @@ register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns)
 	entry->u.nvme.ns = ns;
 	entry->num_io_requests = entries * spdk_divide_round_up(g_queue_depth, g_nr_io_queues_per_ns);
 
-#ifdef PERF_LATENCY_LOG
 	entry->size_in_ios = ns_size / g_io_size_bytes / io_limit;
-#else
-	entry->size_in_ios = ns_size / g_io_size_bytes;
-#endif
+	//entry->size_in_ios = ns_size / g_io_size_bytes;
 
 	entry->io_size_blocks = g_io_size_bytes / sector_size;
 	

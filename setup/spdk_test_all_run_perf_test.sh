@@ -12,7 +12,7 @@
 
 # pwd: spdk_dir
 
-set -eu
+#set -eu
 
 # help function
 function usage() {
@@ -71,7 +71,7 @@ declare -A nodes_local_ip
 
 ### check params ###
 error_params=0
-if [[ "${run_app}" != "perf" ]] && [[ "${run_app}" != "perf_rep" ]]; then
+if [[ "${run_app}" != "perf" ]] && [[ "${run_app}" != "perf_rep" ]] && [[ "${run_app}" != "perf_batch" ]] && [[ "${run_app}" != "perf_rep_batch" ]]; then
     echo "run_app param is invalid."
     error_params=`expr ${error_params} + 1`
 fi
@@ -166,7 +166,7 @@ function set_transport_ids() {
                     transport_ids="${transport_ids} -r 'trtype:rdma adrfam:IPv4 traddr:127.0.0.1 trsvcid:4420'"
                 elif [[ ${host_status} -eq 3 ]]; then
                     # 走 PCIe
-                    transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf}'"
+                    transport_ids="${transport_ids} -r 'trtype:PCIe traddr:${bdf_array[0]}'"
                 fi
                 curr_node=$((curr_node + 1))
                 continue
@@ -258,7 +258,7 @@ function run_perf() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
@@ -267,18 +267,41 @@ function run_perf_rep() {
     ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
         sudo su
         cd ${spdk_dir}
-        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${send_main_rep_finally} ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
+        ./build/bin/spdk_nvme_perf_rep ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${send_main_rep_finally} > ${workspace_dir}/output/perf_output.log
         exit
 ENDSSH
 }
+
+function run_perf_batch() {
+    ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
+        sudo su
+        cd ${spdk_dir}
+        ./build/bin/spdk_nvme_perf_batch ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
+        exit
+ENDSSH
+}
+
+function run_perf_rep_batch() {
+    ssh ${ssh_arg} ${cloudlab_username}@${hostname} << ENDSSH
+        sudo su
+        cd ${spdk_dir}
+        ./build/bin/spdk_nvme_perf_rep_batch ${transport_ids} ${io_queue_depth} ${io_size} ${workload} ${run_time} -P 1 -c 0xc ${send_main_rep_finally} ${io_limit} ${io_num_per_second} ${batch} > ${workspace_dir}/output/perf_output.log
+        exit
+ENDSSH
+}
+
 
 function run_perf_test_fn() {
     get_bdf
     set_params
     if [[ "${run_app}" == "perf" ]]; then
         run_perf
-    else
+    elif [[ "${run_app}" == "perf_rep" ]]; then
         run_perf_rep
+    elif [[ "${run_app}" == "perf_batch" ]]; then
+        run_perf_batch
+    elif [[ "${run_app}" == "perf_rep_batch" ]]; then
+        run_perf_rep_batch
     fi
 }
 

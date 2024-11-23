@@ -136,10 +136,10 @@ run_output_dir="run_output"
 # expriment configs
 WARM_UP_TIME=300
 TEST_TIME=180     
-MIN_IOSIZE=8192    # 8K
+MIN_IOSIZE=4096    # 8K
 MAX_IOSIZE=262144  # 256K
 IO_QUEUE_SIZE_MIN=1
-IO_QUEUE_SIZE_MAX=1
+IO_QUEUE_SIZE_MAX=32
 is_reverse=0
 is_sequence=1
 just_get_log=0
@@ -401,6 +401,7 @@ function configure_all_nodes_without_log(){
         fi
         curr_node=`expr ${curr_node} + 1`
     done
+    just_get_log=1
 }
 
 function configure_all_nodes_wtih_log(){
@@ -415,6 +416,7 @@ function configure_all_nodes_wtih_log(){
         fi
         curr_node=`expr ${curr_node} + 1`
     done
+    just_get_log=0
 }
 
 function warm_up(){
@@ -835,13 +837,101 @@ function test_different_local_pcie(){
 function test_local_three_pcie(){
     local node_num=3
     local host_status=4
-    local io_size=4096
-    local io_queue_size=1
-    while (( ${io_queue_size}<=32 )); do
-        while (( ${io_size}<=262144 )); do
+    local io_size=${MIN_IOSIZE}
+    local io_queue_size=${IO_QUEUE_SIZE_MIN}
+    while (( ${io_queue_size}<=${IO_QUEUE_SIZE_MAX} )); do
+        while (( ${io_size}<=${MAX_IOSIZE} )); do
             local hostname=${hostnames[0]}
             ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf ${node_num} ./setup/setup_output/nodes_local_ip.txt ${io_queue_size} ${io_size} randwrite ${TEST_TIME} ${host_status} 0
-            ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 1 ${host_status} 1 different-local_pcie/randwrite-io_size_${io_size}-io_queue_size_${io_queue_size}-sequence ${hostname}
+            ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} 1 ${host_status} ${just_get_log} three_rep-local_pcie/randwrite-io_size_${io_size}-io_queue_size_${io_queue_size}-sequence ${hostname}
+            io_size=`expr ${io_size} \* 2`
+        done
+        io_queue_size=`expr ${io_queue_size} \* 2`
+    done
+}
+
+function test_two_rep_remote_target(){
+    local node_num=3
+    local host_status=0
+    local io_size=${MIN_IOSIZE}
+    local io_queue_size=${IO_QUEUE_SIZE_MIN}
+    while (( ${io_queue_size}<=${IO_QUEUE_SIZE_MAX} )); do
+        while (( ${io_size}<=${MAX_IOSIZE} )); do
+            local hostname=${hostnames[0]}
+            local targetname1=${hostnames[1]}
+            local targetname2=${hostnames[2]}
+            run_target ${targetname1}
+            run_target ${targetname2}
+            ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf_rep_batch ${node_num} ./setup/setup_output/nodes_local_ip.txt ${io_queue_size} ${io_size} randwrite ${TEST_TIME} ${host_status} 0 10
+            shutdown_target ${targetname1}
+            shutdown_target ${targetname2}
+            ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} ${node_num} ${host_status} ${just_get_log} two_rep-remote_target/randwrite-io_size_${io_size}-io_queue_size_${io_queue_size}-sequence ${hostname} ${targetname1} ${targetname2}
+            io_size=`expr ${io_size} \* 2`
+        done
+        io_queue_size=`expr ${io_queue_size} \* 2`
+    done
+}
+
+function test_two_rep_local_target(){
+    local node_num=2
+    local host_status=1
+    local io_size=${MIN_IOSIZE}
+    local io_queue_size=${IO_QUEUE_SIZE_MIN}
+    while (( ${io_queue_size}<=${IO_QUEUE_SIZE_MAX} )); do
+        while (( ${io_size}<=${MAX_IOSIZE} )); do
+            local hostname=${hostnames[0]}
+            local targetname1=${hostnames[0]}
+            local targetname2=${hostnames[1]}
+            run_target ${targetname1}
+            run_target ${targetname2}
+            ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf_rep_batch ${node_num} ./setup/setup_output/nodes_local_ip.txt ${io_queue_size} ${io_size} randwrite ${TEST_TIME} ${host_status} 0 10
+            shutdown_target ${targetname1}
+            shutdown_target ${targetname2}
+            ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} ${node_num} ${host_status} ${just_get_log} two_rep-local_target/randwrite-io_size_${io_size}-io_queue_size_${io_queue_size}-sequence ${hostname} ${targetname2}
+            io_size=`expr ${io_size} \* 2`
+        done
+        io_queue_size=`expr ${io_queue_size} \* 2`
+    done
+}
+
+function test_two_different_remote_target(){
+    local node_num=3
+    local host_status=0
+    local io_size=${MIN_IOSIZE}
+    local io_queue_size=${IO_QUEUE_SIZE_MIN}
+    while (( ${io_queue_size}<=${IO_QUEUE_SIZE_MAX} )); do
+        while (( ${io_size}<=${MAX_IOSIZE} )); do
+            local hostname=${hostnames[0]}
+            local targetname1=${hostnames[1]}
+            local targetname2=${hostnames[2]}
+            run_target ${targetname1}
+            run_target ${targetname2}
+            ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf_batch ${node_num} ./setup/setup_output/nodes_local_ip.txt ${io_queue_size} ${io_size} randwrite ${TEST_TIME} ${host_status} 0 10
+            shutdown_target ${targetname1}
+            shutdown_target ${targetname2}
+            ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} ${node_num} ${host_status} ${just_get_log} two_different-remote-target/randwrite-io_size_${io_size}-io_queue_size_${io_queue_size}-sequence ${hostname} ${targetname1} ${targetname2}
+            io_size=`expr ${io_size} \* 2`
+        done
+        io_queue_size=`expr ${io_queue_size} \* 2`
+    done
+}
+
+function test_two_different_local_target(){
+    local node_num=2
+    local host_status=1
+    local io_size=${MIN_IOSIZE}
+    local io_queue_size=${IO_QUEUE_SIZE_MIN}
+    while (( ${io_queue_size}<=${IO_QUEUE_SIZE_MAX} )); do
+        while (( ${io_size}<=${MAX_IOSIZE} )); do
+            local hostname=${hostnames[0]}
+            local targetname1=${hostnames[0]}
+            local targetname2=${hostnames[1]}
+            run_target ${targetname1}
+            run_target ${targetname2}
+            ./setup/spdk_test_all_run_perf_test.sh ${cloudlab_username} ${hostname} perf_batch ${node_num} ./setup/setup_output/nodes_local_ip.txt ${io_queue_size} ${io_size} randwrite ${TEST_TIME} ${host_status} 0 10
+            shutdown_target ${targetname1}
+            shutdown_target ${targetname2}
+            ./setup/spdk_test_all_get_run_output.sh ${cloudlab_username} ${node_num} ${host_status} ${just_get_log} two_different-local_target/randwrite-io_size_${io_size}-io_queue_size_${io_queue_size}-sequence ${hostname} ${targetname2}
             io_size=`expr ${io_size} \* 2`
         done
         io_queue_size=`expr ${io_queue_size} \* 2`
@@ -868,7 +958,7 @@ function shutdown_all_target(){
 
 ### run
 output_hostnames
-#setup_all_nodes_fn
+setup_all_nodes_fn
 echo "All nodes are successfully set!"
 
 configure_all_nodes_without_log
@@ -908,3 +998,12 @@ configure_all_nodes_without_log
 # test_different_local_target_127
 
 #test_different_local_pcie
+
+test_local_three_pcie
+
+configure_all_nodes_wtih_log
+
+test_two_rep_remote_target
+test_two_rep_local_target
+test_two_different_remote_target
+test_two_different_local_target
