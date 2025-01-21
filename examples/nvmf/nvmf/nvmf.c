@@ -780,6 +780,9 @@ nvmf_target_advance_state(void)
 			nvmf_tgt_start_subsystems(&g_nvmf_tgt);
 			break;
 		case NVMF_RUNNING:
+			#ifdef TARGET_LATENCY_LOG
+			init_log_fn();
+			#endif
 			fprintf(stdout, "nvmf target is running\n");
 			if (g_migrate_pg_period_us != 0) {
 				g_migrate_pg_poller = SPDK_POLLER_REGISTER(migrate_poll_groups_by_rr, NULL,
@@ -797,6 +800,9 @@ nvmf_target_advance_state(void)
 			nvmf_destroy_nvmf_tgt();
 			break;
 		case NVMF_FINI_SUBSYSTEM:
+			#ifdef TARGET_LATENCY_LOG
+			fini_log_fn();
+			#endif
 			spdk_subsystem_fini(nvmf_subsystem_fini_done, NULL);
 			break;
 		}

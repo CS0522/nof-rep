@@ -1049,7 +1049,7 @@ nvme_rdma_create_reqs(struct nvme_rdma_qpair *rqpair)
 		rdma_req->send_sgl[0].addr = (uint64_t)cmd;
 		rdma_req->send_wr.wr_id = (uint64_t)&rdma_req->rdma_wr;
 		rdma_req->send_wr.next = NULL;
-		rdma_req->send_wr.opcode = IBV_WR_SEND;
+		rdma_req->send_wr.opcode = IBV_WR_SEND_WITH_IMM;
 		rdma_req->send_wr.send_flags = IBV_SEND_SIGNALED;
 		rdma_req->send_wr.sg_list = rdma_req->send_sgl;
 		rdma_req->send_wr.imm_data = 0;
@@ -2357,9 +2357,6 @@ nvme_rdma_qpair_submit_request(struct spdk_nvme_qpair *qpair,
 	wr->next = NULL;
 	nvme_rdma_trace_ibv_sge(wr->sg_list);
 
-    // 用 wr->imm_data 字段记录 req->io_id
-    wr->imm_data = req->io_id;
-
     // myprint
     // printf("提交请求 io_id = %u, req->cmd.cid = %u, rdma_req->id = %u, wr_id = %#X\n", 
     //             req->io_id, req->cmd.cid, rdma_req->id, rdma_req->send_wr.wr_id);
@@ -2579,6 +2576,11 @@ nvme_rdma_process_recv_completion(struct nvme_rdma_poller *poller, struct ibv_wc
     // printf("接收完毕 rdma_rsp->cp.cid = %u -> rdma_req->id = %u, rdma_req->send_wr.wr_id = %#X, io_id = send_wr->imm_data = %u\n", 
     //             rdma_rsp->cpl.cid, rdma_req->id, rdma_req->send_wr.wr_id, rdma_req->send_wr.imm_data);
 
+	#ifdef PERF_LATENCY_LOG
+	struct nvme_request *req = rdma_req->req;
+	clock_gettime(CLOCK_REALTIME, &req->wr_recv_time);
+	#endif
+
 	if ((rdma_req->completion_flags & NVME_RDMA_SEND_COMPLETED) == 0) {
 		return 0;
 	}
@@ -2658,6 +2660,11 @@ nvme_rdma_process_send_completion(struct nvme_rdma_poller *poller,
 	rdma_req->completion_flags |= NVME_RDMA_SEND_COMPLETED;
 	assert(rqpair->current_num_sends > 0);
 	rqpair->current_num_sends--;
+
+	#ifdef PERF_LATENCY_LOG
+	struct nvme_request* req = rdma_req->req;
+	clock_gettime(CLOCK_REALTIME, &req->wr_send_complete_time);
+	#endif
 
     // myprint
     // printf("发送完毕 rdma_req->id = %u, rdma_req->send_wr->wr_id = %#X, io_id = send_wr->imm_data = %u\n", 

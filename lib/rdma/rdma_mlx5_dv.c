@@ -293,6 +293,12 @@ spdk_rdma_qp_flush_send_wrs(struct spdk_rdma_qp *spdk_rdma_qp, struct ibv_send_w
 		return 0;
 	}
 
+	#ifdef PERF_LATENCY_LOG
+	struct spdk_nvme_rdma_req *rdma_req = SPDK_CONTAINEROF(spdk_rdma_qp->send_wrs.first, struct spdk_nvme_rdma_req, send_wr);
+	struct nvme_request *req = rdma_req->req;
+	clock_gettime(CLOCK_REALTIME, &req->wr_send_time);
+	#endif
+
 	rc = ibv_wr_complete(mlx5_qp->qpex);
 
 	if (spdk_unlikely(rc)) {

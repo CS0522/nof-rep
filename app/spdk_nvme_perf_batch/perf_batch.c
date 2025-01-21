@@ -204,6 +204,14 @@ struct perf_task {
 #endif
 };
 
+struct perf_task_link{
+	struct perf_task* task;
+	struct perf_task_link* next;
+};
+
+static struct perf_task_link* perf_task_link_head;
+static struct perf_task_link* perf_task_link_tail;
+
 struct worker_thread {
 	TAILQ_HEAD(, ns_worker_ctx)	ns_ctx;
 	TAILQ_ENTRY(worker_thread)	link;
@@ -291,6 +299,14 @@ static uint8_t g_transport_tos = 0;
 
 static uint32_t g_rdma_srq_size;
 uint8_t *g_psk = NULL;
+
+static uint32_t io_limit = 1;
+static uint32_t io_num_per_second = 0;
+static struct timespec before_time;
+static uint32_t batch = 0;
+static uint32_t submit_batch = 0;
+static uint32_t batch_size = 1;
+static uint32_t perf_num = 0;
 
 #ifdef PERF_LATENCY_LOG
 /** 消息队列 id */
@@ -1348,6 +1364,24 @@ build_nvme_ns_name(char *name, size_t length, struct spdk_nvme_ctrlr *ctrlr, uin
 
 }
 
+static bool judge_if_send(){
+	struct timespec now_time;
+	struct timespec io_send_period;
+	struct timespec temp;
+	io_send_period.tv_sec = 1;
+	io_send_period.tv_nsec = 0;
+	timespec_divide(&io_send_period, io_num_per_second);
+	timespec_multiply(&io_send_period, batch_size);
+	clock_gettime(CLOCK_REALTIME, &now_time);
+	temp = now_time;
+	timespec_sub(&now_time, &now_time, &before_time);
+	if(!timespec_sub(&now_time, &now_time, &io_send_period)){
+		before_time = temp;
+		return true;
+	}
+	return false;
+}
+
 static void
 register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns)
 {
@@ -1409,7 +1443,9 @@ register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns)
 	entry->u.nvme.ns = ns;
 	entry->num_io_requests = entries * spdk_divide_round_up(g_queue_depth, g_nr_io_queues_per_ns);
 
-	entry->size_in_ios = ns_size / g_io_size_bytes;
+	entry->size_in_ios = ns_size / g_io_size_bytes / io_limit;
+	//entry->size_in_ios = ns_size / g_io_size_bytes;
+
 	entry->io_size_blocks = g_io_size_bytes / sector_size;
 
 	if (g_is_random) {
@@ -1687,7 +1723,16 @@ task_complete(struct perf_task *task)
             io_id = 1;
         task->io_id = io_id;
 #endif
-		submit_single_io(task);
+		if(io_num_per_second == 0){
+			submit_single_io(task);
+		}else{
+			struct perf_task_link* new_perf_task_link = malloc(sizeof(struct perf_task_link));
+			new_perf_task_link->task = task;
+			perf_task_link_tail->next = new_perf_task_link;
+			new_perf_task_link->next = NULL;
+			perf_task_link_tail = new_perf_task_link;
+			batch++;
+		}
 	}
 }
 
@@ -1747,7 +1792,15 @@ submit_io(struct ns_worker_ctx *ns_ctx, int queue_depth, uint32_t ns_id)
 #ifdef PERF_LATENCY_LOG
 		task->ns_id = ns_id;
 #endif
-		submit_single_io(task);
+		if(io_num_per_second == 0){
+			submit_single_io(task);
+		}else{
+			struct perf_task_link* new_perf_task_link = malloc(sizeof(struct perf_task_link));
+			new_perf_task_link->task = task;
+			perf_task_link_tail->next = new_perf_task_link;
+			new_perf_task_link->next = NULL;
+			perf_task_link_tail = new_perf_task_link;
+		}
 	}
 }
 
@@ -1877,6 +1930,8 @@ work_fn(void *arg)
 
 	uint32_t ns_id = 0;
 
+	clock_gettime(CLOCK_REALTIME, &before_time);
+
 	/* Submit initial I/O for each namespace. */
 	TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
 		submit_io(ns_ctx, g_queue_depth, ns_id);
@@ -1891,6 +1946,7 @@ work_fn(void *arg)
 		 * I/O will be submitted in the io_complete callback
 		 * to replace each I/O that is completed.
 		 */
+
 		TAILQ_FOREACH(ns_ctx, &worker->ns_ctx, link) {
 			if (g_continue_on_error && !ns_ctx->is_draining) {
 				/* Submit any I/O that is queued up */
@@ -1920,6 +1976,27 @@ work_fn(void *arg)
 
 			if (!ns_ctx->is_draining) {
 				all_draining = false;
+			}
+		}
+
+		if(io_num_per_second > 0){
+			while(submit_batch < batch_size * perf_num){
+				struct perf_task_link* temp_perf_task_link = perf_task_link_head->next;
+				if(temp_perf_task_link != NULL){
+					perf_task_link_head->next = temp_perf_task_link->next;
+					if(temp_perf_task_link->next == NULL){
+						perf_task_link_tail = perf_task_link_head;
+					}
+				}
+				submit_single_io(temp_perf_task_link->task);
+				submit_batch++;
+			}
+			if(batch >= batch_size * perf_num){
+				batch = 0;
+				submit_batch = 0;
+				while(!judge_if_send()){
+					continue;
+				}
 			}
 		}
 
@@ -2056,6 +2133,9 @@ usage(char *program_name)
 #endif
 	printf("\n\n");
 	printf("==== BASIC OPTIONS ====\n\n");
+	printf("\t-B, --batch-size Number of IO to send\n");
+	printf("\t-K, --io-limit change the io range to io_size / io_limit\n");
+	printf("\t-E. --io-num-per-second the io_num to send per second\n");
 	printf("\t-q, --io-depth <val> io depth\n");
 	printf("\t-o, --io-size <val> io size in bytes\n");
 	printf("\t-w, --io-pattern <pattern> io pattern type, must be one of\n");
@@ -2566,9 +2646,15 @@ parse_metadata(const char *metacfg_str)
 	return 0;
 }
 
-#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:"
+#define PERF_GETOPT_SHORT "a:b:c:d:e:ghi:lmo:q:r:k:s:t:w:z:A:C:DF:GHILM:NO:P:Q:RS:T:U:VZ:K:E:B:"
 
 static const struct option g_perf_cmdline_opts[] = {
+#define BATCH_SIZE 'B'
+    {"batch-size",     required_argument, NULL, BATCH_SIZE},
+#define IO_LIMIT 'K'
+    {"io-limit",     required_argument, NULL, IO_LIMIT},
+#define IO_NUM_PER_SECOND 'E'
+    {"io-num-per-second",     required_argument, NULL, IO_NUM_PER_SECOND},
 #define PERF_WARMUP_TIME	'a'
 	{"warmup-time",			required_argument,	NULL, PERF_WARMUP_TIME},
 #define PERF_ALLOWED_PCI_ADDR	'b'
@@ -2688,6 +2774,9 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 
 	while ((op = getopt_long(argc, argv, PERF_GETOPT_SHORT, g_perf_cmdline_opts, &long_idx)) != -1) {
 		switch (op) {
+		case BATCH_SIZE:
+		case IO_LIMIT:
+		case IO_NUM_PER_SECOND:
 		case PERF_WARMUP_TIME:
 		case PERF_SHMEM_GROUP_ID:
 		case PERF_MAX_COMPLETIONS_PER_POLL:
@@ -2706,6 +2795,15 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 				return val;
 			}
 			switch (op) {
+			case BATCH_SIZE:
+				batch_size = val;
+				break;
+		    case IO_LIMIT:
+				io_limit = val;
+				break;
+			case IO_NUM_PER_SECOND:
+				io_num_per_second = val;
+				break;
 			case PERF_WARMUP_TIME:
 				g_warmup_time_in_sec = val;
 				break;
@@ -2822,6 +2920,7 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts)
 				usage(argv[0]);
 				return 1;
 			}
+			perf_num++;
 			break;
 		case PERF_IO_PATTERN:
 			g_workload_type = optarg;
@@ -3628,6 +3727,10 @@ main(int argc, char **argv)
     // myprint
     printf("Create a thread to write latency log. \n");
 #endif
+
+	perf_task_link_head = malloc(sizeof(struct perf_task_link));
+	perf_task_link_head->task = perf_task_link_head->task = NULL;
+	perf_task_link_tail = perf_task_link_head;
 
 	printf("Initialization complete. Launching workers.\n");
 

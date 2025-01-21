@@ -476,10 +476,6 @@ spdk_thread_lib_fini(void)
 	g_thread_op_supported_fn = NULL;
 	g_ctx_sz = 0;
 	if (g_app_thread != NULL) {
-		#ifdef LANTENCY_LOG
-		struct timespec temp;
-		write_log_to_file(0, NULL, temp, temp, true);
-		#endif
 		_free_thread(g_app_thread);
 		g_app_thread = NULL;
 	}
@@ -3114,5 +3110,63 @@ spdk_spin_held(struct spdk_spinlock *sspin)
 
 	return sspin->thread == thread;
 }
+
+#ifdef TARGET_LATENCY_LOG
+void latency_log_1s(union sigval sv){
+	pthread_mutex_lock(&log_mutex);
+	if(module_log.bdev.io_num != 0 || module_log.driver.io_num != 0 || module_log.target.io_num != 0){
+		struct latency_module_log* temp = malloc(sizeof(struct latency_module_log));
+		temp->bdev.io_num = module_log.bdev.io_num;
+		temp->driver.io_num = module_log.driver.io_num;
+		temp->target.io_num = module_log.target.io_num;
+		temp->bdev.latency_time = module_log.bdev.latency_time;
+		temp->driver.latency_time = module_log.driver.latency_time;
+		temp->target.latency_time = module_log.target.latency_time;
+		module_log.bdev.io_num = module_log.driver.io_num = module_log.target.io_num = 0;
+		module_log.bdev.latency_time.tv_sec = module_log.bdev.latency_time.tv_nsec = 0;
+		module_log.driver.latency_time.tv_sec = module_log.driver.latency_time.tv_nsec = 0;
+		module_log.target.latency_time.tv_sec = module_log.target.latency_time.tv_nsec = 0;
+		spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, temp);
+	}
+	pthread_mutex_unlock(&log_mutex); 
+}
+
+void init_log_fn(){
+    pthread_mutex_init(&log_mutex, NULL);
+
+	module_log.bdev.io_num = module_log.driver.io_num = module_log.target.io_num = 0;
+	module_log.bdev.latency_time.tv_sec = module_log.bdev.latency_time.tv_nsec = 0;
+	module_log.driver.latency_time.tv_sec = module_log.driver.latency_time.tv_nsec = 0;
+	module_log.target.latency_time.tv_sec = module_log.target.latency_time.tv_nsec = 0;
+
+    timer_t timerid;
+    struct sigevent sev;
+    struct itimerspec its;
+
+    sev.sigev_notify = SIGEV_THREAD;
+    sev.sigev_notify_function = latency_log_1s;
+    sev.sigev_notify_attributes = NULL;
+    sev.sigev_value.sival_ptr = &module_log;
+
+    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
+        perror("timer_create");
+        return 1;
+    }
+
+    its.it_value.tv_sec = 1;
+    its.it_value.tv_nsec = 0;
+    its.it_interval.tv_sec = 1;
+    its.it_interval.tv_nsec = 0;
+
+    if (timer_settime(timerid, 0, &its, NULL) == -1) {
+        perror("timer_settime");
+        return 1;
+    }
+}
+
+void fini_log_fn(){
+    pthread_mutex_destroy(&log_mutex);
+}
+#endif
 
 SPDK_LOG_REGISTER_COMPONENT(thread)

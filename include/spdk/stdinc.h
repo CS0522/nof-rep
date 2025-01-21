@@ -65,6 +65,8 @@ extern "C" {
 #include <sys/user.h>
 #include <sys/wait.h>
 #include <regex.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
 
 /* GNU extension */
 #include <getopt.h>

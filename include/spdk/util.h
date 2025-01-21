@@ -16,63 +16,94 @@
 #include "spdk/stdinc.h"
 #include "spdk/queue.h"
 
-// #define LANTENCY_LOG
+//#define TARGET_LATENCY_LOG
 #define APP_THREAD_EXCLUSIVE_REACTOR
+#define PERF_IO_WORKER_EXCLUSIVE_CORE
 
-#define PERF_LATENCY_LOG
+//#define PERF_LATENCY_LOG
 
-#ifdef LANTENCY_LOG
-#define TARGET_LOG_FILE_PATH "../target_latency_log.csv"
+#ifdef TARGET_LATENCY_LOG
+#define TARGET_LOG_FILE_PATH "../output/target_latency_log.csv"
 
 struct latency_log_ctx{
-	uint64_t io_id;
-	const char* module;
-	struct timespec start_time;
-	struct timespec end_time;
+	struct timespec latency_time;
+	uint32_t io_num;
 };
 
-void write_log_to_file(uint64_t wr_id, const char* module, struct timespec start_time, struct timespec end_time, bool is_finish);
+struct latency_module_log{
+	struct latency_log_ctx target;
+	struct latency_log_ctx bdev;
+	struct latency_log_ctx driver;
+};
+
+extern struct latency_module_log module_log;
+
+extern pthread_mutex_t log_mutex;
+
+extern bool is_io_log;
+
+void write_log_to_file(const char* module, struct timespec latency_time, uint32_t iops);
 
 void write_latency_log(void* ctx);
 #endif
 
 #ifdef PERF_LATENCY_LOG
-#define HOST_LOG_FILE_PATH "../host_latency_log.csv"
+#define HOST_LOG_FILE_PATH "../output/host_latency_log.csv"
 
-/* latency log context for perf task */
-struct latency_log_task_ctx
-{
-    uint32_t io_id;
-    // 1: main_task, 0: rep_task
-    int is_main_task;
-    // module is related with task type
-    // main_task, or rep_task
-    // const char *module;
-    // the corresponding namespace name of the task
-    char ns_entry_name[1024];
-    // the timestamp of creating entire task (may be queued after task creation)
-    struct timespec create_time;
-    // the timestamp of each Rep_task Submission
-    struct timespec submit_time;
-    // the timestamp of each Rep_task Completion
-    struct timespec complete_time;
-    // the timestamp of each IO Completion
-    struct timespec all_complete_time;
-    // the timestamp of the creation each Rep_task,
-    // only used for the first time to record duplication cost
-    struct timespec first_create_time;
+struct latency_log_ctx{
+	struct timespec latency_time;
+	uint32_t io_num;
 };
 
-/* For tasks. */
+struct latency_ns_log{
+	struct latency_log_ctx task_queue_latency;
+	struct latency_log_ctx task_complete_latency;
+	struct latency_log_ctx req_send_latency;
+	struct latency_log_ctx req_complete_latency;
+	struct latency_log_ctx wr_send_latency;
+	struct latency_log_ctx wr_complete_latency;
+};
 
-void write_log_tasks_to_file(uint32_t io_id, int ns_index, int is_main_task, 
-                            struct timespec create_time, struct timespec submit_time,
-                            struct timespec complete_time, struct timespec all_complete_time,
-                            struct timespec first_create_time, 
-                            int new_line);
+struct latency_log_msg{
+	long mtype;
+	struct latency_ns_log* latency_log_namespaces;
+};
+
+extern struct latency_log_msg latency_msg;
+
+void write_log_tasks_to_file(int i, uint32_t task_queue_io_num, struct timespec task_queue_latency, uint32_t task_complete_io_num, struct timespec task_complete_latency,
+							uint32_t req_send_io_num, struct timespec req_send_latency, uint32_t req_complete_io_num, struct timespec req_complete_latency,
+							uint32_t wr_send_io_num, struct timespec wr_send_latency, uint32_t wr_complete_io_num, struct timespec wr_complete_latency,
+							int new_line);
 
 void write_latency_tasks_log(void *ctx, char **g_ns_name, uint32_t g_rep_num, uint32_t g_ns_num);
+
+/* 检查 msg queue 消息个数 */
+int check_msg_qnum(int msgid);
+
+extern pthread_mutex_t log_mutex;
+
+extern uint32_t namespace_num;
+
+extern int msgid;
+
+extern bool is_prob_finish;
+
+void latency_log_1s(union sigval sv);
+
+void init_log_fn();
+
+void fini_log_fn();
+
 #endif
+
+int timespec_sub(struct timespec *result, const struct timespec *a, const struct timespec *b);
+
+void timespec_add(struct timespec *result, const struct timespec *a, const struct timespec *b);
+
+int timespec_divide(struct timespec *ts, int num);
+
+int timespec_multiply(struct timespec *ts, int num);
 
 #ifdef __cplusplus
 extern "C" {

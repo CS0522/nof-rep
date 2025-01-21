@@ -29,7 +29,7 @@
 #include "spdk_internal/trace_defs.h"
 #include "spdk_internal/assert.h"
 
-#ifdef LANTENCY_LOG
+#ifdef TARGET_LATENCY_LOG
 #include"spdk/latency_rdma_struct.h"
 #endif
 
@@ -3577,7 +3577,7 @@ bdev_io_submit(struct spdk_bdev_io *bdev_io)
 	bdev_ch_add_to_io_submitted(bdev_io);
 
 	bdev_io->internal.submit_tsc = spdk_get_ticks();
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	clock_gettime(CLOCK_REALTIME, &bdev_io->start_time);
 	#endif
 	spdk_trace_record_tsc(bdev_io->internal.submit_tsc, TRACE_BDEV_IO_START,
@@ -7258,15 +7258,15 @@ bdev_io_complete(void *ctx)
 
 	tsc = spdk_get_ticks();
 	tsc_diff = tsc - bdev_io->internal.submit_tsc;
-	#ifdef LANTENCY_LOG
-	struct latency_log_ctx* latency_log = calloc(1, sizeof(struct latency_log_ctx));
-	struct spdk_nvmf_request* req = (struct spdk_nvmf_request*)bdev_io->internal.caller_ctx;
-	struct spdk_nvmf_rdma_request* rdma_req = SPDK_CONTAINEROF(req, struct spdk_nvmf_rdma_request, req); 
-    latency_log->io_id = rdma_req->io_id;
-    latency_log->module = "bdev";
-    latency_log->start_time = bdev_io->start_time;
-	clock_gettime(CLOCK_REALTIME, &latency_log->end_time);
-	spdk_thread_send_msg(spdk_thread_get_app_thread(), write_latency_log, latency_log);
+	#ifdef TARGET_LATENCY_LOG
+    pthread_mutex_lock(&log_mutex);
+	struct timespec end_time;
+	struct timespec sub_time;
+	clock_gettime(CLOCK_REALTIME, &end_time);
+	timespec_sub(&sub_time, &end_time, &bdev_io->start_time);
+	timespec_add(&(module_log.bdev.latency_time), &(module_log.bdev.latency_time), &sub_time);
+	module_log.bdev.io_num++;
+    pthread_mutex_unlock(&log_mutex);
 	#endif
 
 	bdev_ch_remove_from_io_submitted(bdev_io);

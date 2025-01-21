@@ -783,7 +783,7 @@ typedef void (*spdk_bdev_io_get_aux_buf_cb)(struct spdk_io_channel *ch,
 struct spdk_bdev_io {
 	/** The block device that this I/O belongs to. */
 	struct spdk_bdev *bdev;
-	#ifdef LANTENCY_LOG
+	#ifdef TARGET_LATENCY_LOG
 	struct timespec start_time;
 	#endif
 

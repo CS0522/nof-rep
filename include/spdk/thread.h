@@ -1194,6 +1194,12 @@ void spdk_iobuf_put(struct spdk_iobuf_channel *ch, void *buf, uint64_t len);
 typedef void (*spdk_iobuf_get_stats_cb)(struct spdk_iobuf_module_stats *modules,
 					uint32_t num_modules, void *cb_arg);
 
+#ifdef TARGET_LATENCY_LOG
+void latency_log_1s(union sigval sv);
+void init_log_fn();
+void fini_log_fn();
+#endif
+
 /**
  * Get iobuf statistics.
  *

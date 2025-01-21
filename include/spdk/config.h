@@ -12,14 +12,14 @@
 #undef SPDK_CONFIG_CUSTOMOCF
 #undef SPDK_CONFIG_DAOS
 #define SPDK_CONFIG_DAOS_DIR 
-#define SPDK_CONFIG_DEBUG 1
+#undef SPDK_CONFIG_DEBUG
 #undef SPDK_CONFIG_DPDK_COMPRESSDEV
-#define SPDK_CONFIG_DPDK_DIR /home/frank/Workspace/spdk-24.05.x/dpdk/build
+#define SPDK_CONFIG_DPDK_DIR /home/ice-cream/spdk/dpdk/build
 #define SPDK_CONFIG_DPDK_INC_DIR 
 #define SPDK_CONFIG_DPDK_LIB_DIR 
 #undef SPDK_CONFIG_DPDK_PKG_CONFIG
 #undef SPDK_CONFIG_DPDK_UADK
-#define SPDK_CONFIG_ENV /home/frank/Workspace/spdk-24.05.x/lib/env_dpdk
+#define SPDK_CONFIG_ENV /home/ice-cream/spdk/lib/env_dpdk
 #define SPDK_CONFIG_EXAMPLES 1
 #undef SPDK_CONFIG_FC
 #define SPDK_CONFIG_FC_PATH 
@@ -50,6 +50,7 @@
 #undef SPDK_CONFIG_OCF
 #define SPDK_CONFIG_OCF_PATH 
 #define SPDK_CONFIG_OPENSSL_PATH 
+#define SPDK_CONFIG_PERF_LATENCY_LOG 1
 #undef SPDK_CONFIG_PGO_CAPTURE
 #define SPDK_CONFIG_PGO_DIR 
 #undef SPDK_CONFIG_PGO_USE
@@ -63,6 +64,7 @@
 #define SPDK_CONFIG_RDMA_SET_TOS 1
 #undef SPDK_CONFIG_SHARED
 #undef SPDK_CONFIG_SMA
+#undef SPDK_CONFIG_TARGET_LATENCY_LOG
 #define SPDK_CONFIG_TESTS 1
 #undef SPDK_CONFIG_TSAN
 #undef SPDK_CONFIG_UBLK
